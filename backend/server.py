@@ -1,4 +1,5 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Response
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -6,10 +7,20 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List
+from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone
-
+import bcrypt
+import jwt
+from enum import Enum
+import base64
+import openpyxl
+from openpyxl.styles import Font, Alignment
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from io import BytesIO
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -19,54 +30,957 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Create the main app without a prefix
+# JWT Secret
+JWT_SECRET = os.environ.get('JWT_SECRET', 'pardis-paj-khorasan-secret-2024')
+
+# Create the main app
 app = FastAPI()
-
-# Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
+security = HTTPBearer()
 
+# ==================== Enums ====================
+class UserRole(str, Enum):
+    ADMIN = "admin"
+    REQUESTER = "requester"
+    PROCUREMENT = "procurement"
+    FINANCIAL = "financial"
+    MANAGEMENT = "management"
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
+class RequestStatus(str, Enum):
+    DRAFT = "draft"
+    PENDING_PROCUREMENT = "pending_procurement"
+    PENDING_MANAGEMENT = "pending_management"
+    PENDING_PURCHASE = "pending_purchase"
+    PENDING_RECEIPT = "pending_receipt"
+    PENDING_INVOICE = "pending_invoice"
+    PENDING_FINANCIAL = "pending_financial"
+    COMPLETED = "completed"
+    REJECTED = "rejected"
+
+class ActionType(str, Enum):
+    CREATED = "created"
+    SUBMITTED = "submitted"
+    INQUIRIES_ADDED = "inquiries_added"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    RECEIPT_ADDED = "receipt_added"
+    INVOICE_UPLOADED = "invoice_uploaded"
+    COMPLETED = "completed"
+
+# ==================== Models ====================
+class User(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
+    username: str
+    full_name: str
+    password_hash: str
+    roles: List[UserRole]
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class UserCreate(BaseModel):
+    username: str
+    full_name: str
+    password: str
+    roles: List[UserRole]
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    password: Optional[str] = None
+    roles: Optional[List[UserRole]] = None
+
+class UserResponse(BaseModel):
+    id: str
+    username: str
+    full_name: str
+    roles: List[UserRole]
+
+class CostCenter(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    name_en: str
+
+class Inquiry(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    unit_price: float
+    quantity: int
+    total_price: float
+    image_base64: Optional[str] = None
+    is_selected: bool = False
+
+class Receipt(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    receipt_number: str
+    quantity: int
+    unit_price: float
+    total_price: float
+    confirmed_by_procurement: bool = False
+    confirmed_by_requester: bool = False
+    procurement_confirmed_at: Optional[datetime] = None
+    requester_confirmed_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class RequestHistory(BaseModel):
+    action: ActionType
+    actor_id: str
+    actor_name: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    notes: Optional[str] = None
+    from_status: Optional[RequestStatus] = None
+    to_status: Optional[RequestStatus] = None
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+class GoodsRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    request_number: str
+    requester_id: str
+    requester_name: str
+    item_name: str
+    quantity: int
+    cost_center: str
+    image_base64: Optional[str] = None
+    description: Optional[str] = None
+    status: RequestStatus = RequestStatus.DRAFT
+    inquiries: List[Inquiry] = []
+    receipts: List[Receipt] = []
+    invoice_base64: Optional[str] = None
+    history: List[RequestHistory] = []
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-# Add your routes to the router instead of directly to app
-@api_router.get("/")
-async def root():
-    return {"message": "Hello World"}
+class GoodsRequestCreate(BaseModel):
+    item_name: str
+    quantity: int
+    cost_center: str
+    image_base64: Optional[str] = None
+    description: Optional[str] = None
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
+class GoodsRequestUpdate(BaseModel):
+    item_name: Optional[str] = None
+    quantity: Optional[int] = None
+    cost_center: Optional[str] = None
+    image_base64: Optional[str] = None
+    description: Optional[str] = None
+
+class InquiryCreate(BaseModel):
+    unit_price: float
+    quantity: int
+    total_price: float
+    image_base64: Optional[str] = None
+
+class InquirySelect(BaseModel):
+    inquiry_id: str
+
+class ActionRequest(BaseModel):
+    notes: Optional[str] = None
+
+class ReceiptCreate(BaseModel):
+    quantity: int
+    unit_price: float
+    total_price: float
+
+class ReceiptConfirm(BaseModel):
+    receipt_id: str
+
+class InvoiceUpload(BaseModel):
+    invoice_base64: str
+
+class Notification(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    request_id: str
+    request_number: str
+    message: str
+    is_read: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+# ==================== Auth ====================
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        return payload
+    except:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+
+async def create_notification(user_id: str, request_id: str, request_number: str, message: str):
+    notification = Notification(
+        user_id=user_id,
+        request_id=request_id,
+        request_number=request_number,
+        message=message
+    )
+    doc = notification.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.notifications.insert_one(doc)
+
+async def get_next_request_number() -> str:
+    current_year = 1404  # سال شمسی
+    counter_doc = await db.counters.find_one({"type": "request_number", "year": current_year})
+    if not counter_doc:
+        await db.counters.insert_one({"type": "request_number", "year": current_year, "counter": 1})
+        return f"{current_year}-1"
+    else:
+        new_counter = counter_doc['counter'] + 1
+        await db.counters.update_one(
+            {"type": "request_number", "year": current_year},
+            {"$set": {"counter": new_counter}}
+        )
+        return f"{current_year}-{new_counter}"
+
+async def get_next_receipt_number() -> str:
+    counter_doc = await db.counters.find_one({"type": "receipt_number"})
+    if not counter_doc:
+        await db.counters.insert_one({"type": "receipt_number", "counter": 1})
+        return "R-00001"
+    else:
+        new_counter = counter_doc['counter'] + 1
+        await db.counters.update_one(
+            {"type": "receipt_number"},
+            {"$set": {"counter": new_counter}}
+        )
+        return f"R-{new_counter:05d}"
+
+# ==================== Routes ====================
+
+# Auth Routes
+@api_router.post("/auth/register")
+async def register(user_data: UserCreate, current_user: dict = Depends(get_current_user)):
+    # فقط ادمین می‌تواند کاربر جدید ثبت کند
+    if UserRole.ADMIN not in current_user.get('roles', []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can register users")
     
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
+    existing = await db.users.find_one({"username": user_data.username})
+    if existing:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists")
     
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
+    user = User(
+        username=user_data.username,
+        full_name=user_data.full_name,
+        password_hash=hash_password(user_data.password),
+        roles=user_data.roles
+    )
+    
+    doc = user.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.users.insert_one(doc)
+    
+    return {"message": "User created successfully", "user_id": user.id}
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
+@api_router.post("/auth/login")
+async def login(credentials: UserLogin):
+    user = await db.users.find_one({"username": credentials.username})
+    if not user or not verify_password(credentials.password, user['password_hash']):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
+    token_data = {
+        "user_id": user['id'],
+        "username": user['username'],
+        "full_name": user['full_name'],
+        "roles": user['roles']
+    }
+    token = jwt.encode(token_data, JWT_SECRET, algorithm="HS256")
     
-    return status_checks
+    return {"token": token, "user": token_data}
 
-# Include the router in the main app
+@api_router.get("/auth/me")
+async def get_me(current_user: dict = Depends(get_current_user)):
+    return current_user
+
+# User Management
+@api_router.get("/users", response_model=List[UserResponse])
+async def get_users(current_user: dict = Depends(get_current_user)):
+    if UserRole.ADMIN not in current_user.get('roles', []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    return users
+
+@api_router.put("/users/{user_id}")
+async def update_user(user_id: str, user_data: UserUpdate, current_user: dict = Depends(get_current_user)):
+    if UserRole.ADMIN not in current_user.get('roles', []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    update_data = {}
+    if user_data.full_name:
+        update_data['full_name'] = user_data.full_name
+    if user_data.password:
+        update_data['password_hash'] = hash_password(user_data.password)
+    if user_data.roles:
+        update_data['roles'] = user_data.roles
+    
+    if not update_data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No data to update")
+    
+    result = await db.users.update_one({"id": user_id}, {"$set": update_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    return {"message": "User updated successfully"}
+
+@api_router.delete("/users/{user_id}")
+async def delete_user(user_id: str, current_user: dict = Depends(get_current_user)):
+    if UserRole.ADMIN not in current_user.get('roles', []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    result = await db.users.delete_one({"id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    return {"message": "User deleted successfully"}
+
+# Cost Centers
+@api_router.get("/cost-centers")
+async def get_cost_centers(current_user: dict = Depends(get_current_user)):
+    centers = await db.cost_centers.find({}, {"_id": 0}).to_list(100)
+    if not centers:
+        # Initialize default cost centers
+        default_centers = [
+            CostCenter(name="دفتر", name_en="Office"),
+            CostCenter(name="قیر", name_en="Bitumen"),
+            CostCenter(name="پارادیزو", name_en="Paradiso")
+        ]
+        for center in default_centers:
+            await db.cost_centers.insert_one(center.model_dump())
+        centers = [c.model_dump() for c in default_centers]
+    return centers
+
+# Goods Requests
+@api_router.post("/goods-requests")
+async def create_goods_request(request_data: GoodsRequestCreate, current_user: dict = Depends(get_current_user)):
+    request_number = await get_next_request_number()
+    
+    goods_request = GoodsRequest(
+        request_number=request_number,
+        requester_id=current_user['user_id'],
+        requester_name=current_user['full_name'],
+        item_name=request_data.item_name,
+        quantity=request_data.quantity,
+        cost_center=request_data.cost_center,
+        image_base64=request_data.image_base64,
+        description=request_data.description,
+        status=RequestStatus.DRAFT,
+        history=[RequestHistory(
+            action=ActionType.CREATED,
+            actor_id=current_user['user_id'],
+            actor_name=current_user['full_name'],
+            from_status=None,
+            to_status=RequestStatus.DRAFT
+        )]
+    )
+    
+    doc = goods_request.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    for i, hist in enumerate(doc['history']):
+        doc['history'][i]['timestamp'] = hist['timestamp'].isoformat()
+    
+    await db.goods_requests.insert_one(doc)
+    
+    return {"message": "Request created", "request_id": goods_request.id, "request_number": request_number}
+
+@api_router.get("/goods-requests")
+async def get_goods_requests(current_user: dict = Depends(get_current_user)):
+    user_roles = current_user.get('roles', [])
+    user_id = current_user['user_id']
+    
+    query = {}
+    # متقاضی فقط درخواست‌های خودش را می‌بیند
+    if UserRole.ADMIN not in user_roles:
+        if UserRole.REQUESTER in user_roles and len(user_roles) == 1:
+            query['requester_id'] = user_id
+    
+    requests = await db.goods_requests.find(query, {"_id": 0}).to_list(1000)
+    
+    # Convert datetime strings
+    for req in requests:
+        if isinstance(req.get('created_at'), str):
+            req['created_at'] = datetime.fromisoformat(req['created_at'])
+        if isinstance(req.get('updated_at'), str):
+            req['updated_at'] = datetime.fromisoformat(req['updated_at'])
+    
+    return requests
+
+@api_router.get("/goods-requests/{request_id}")
+async def get_goods_request(request_id: str, current_user: dict = Depends(get_current_user)):
+    request = await db.goods_requests.find_one({"id": request_id}, {"_id": 0})
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    # بررسی دسترسی
+    user_roles = current_user.get('roles', [])
+    if UserRole.ADMIN not in user_roles:
+        if request['requester_id'] != current_user['user_id']:
+            # بررسی اینکه آیا کاربر نقشی در این درخواست دارد یا نه
+            has_role = any(role in user_roles for role in [UserRole.PROCUREMENT, UserRole.MANAGEMENT, UserRole.FINANCIAL])
+            if not has_role:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    return request
+
+@api_router.put("/goods-requests/{request_id}")
+async def update_goods_request(request_id: str, request_data: GoodsRequestUpdate, current_user: dict = Depends(get_current_user)):
+    request = await db.goods_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    if request['requester_id'] != current_user['user_id']:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    if request['status'] != RequestStatus.DRAFT:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Can only edit draft requests")
+    
+    update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if request_data.item_name:
+        update_data['item_name'] = request_data.item_name
+    if request_data.quantity:
+        update_data['quantity'] = request_data.quantity
+    if request_data.cost_center:
+        update_data['cost_center'] = request_data.cost_center
+    if request_data.image_base64 is not None:
+        update_data['image_base64'] = request_data.image_base64
+    if request_data.description is not None:
+        update_data['description'] = request_data.description
+    
+    await db.goods_requests.update_one({"id": request_id}, {"$set": update_data})
+    return {"message": "Request updated"}
+
+@api_router.post("/goods-requests/{request_id}/submit")
+async def submit_request(request_id: str, current_user: dict = Depends(get_current_user)):
+    request = await db.goods_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    if request['requester_id'] != current_user['user_id']:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    if request['status'] != RequestStatus.DRAFT:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Request already submitted")
+    
+    history_entry = RequestHistory(
+        action=ActionType.SUBMITTED,
+        actor_id=current_user['user_id'],
+        actor_name=current_user['full_name'],
+        from_status=RequestStatus.DRAFT,
+        to_status=RequestStatus.PENDING_PROCUREMENT
+    )
+    
+    await db.goods_requests.update_one(
+        {"id": request_id},
+        {
+            "$set": {
+                "status": RequestStatus.PENDING_PROCUREMENT,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            },
+            "$push": {"history": {
+                **history_entry.model_dump(),
+                "timestamp": history_entry.timestamp.isoformat()
+            }}
+        }
+    )
+    
+    # Notify procurement users
+    procurement_users = await db.users.find({"roles": UserRole.PROCUREMENT}).to_list(100)
+    for user in procurement_users:
+        await create_notification(
+            user['id'],
+            request_id,
+            request['request_number'],
+            f"درخواست جدید کالا از {current_user['full_name']}"
+        )
+    
+    return {"message": "Request submitted"}
+
+@api_router.post("/goods-requests/{request_id}/inquiries")
+async def add_inquiries(request_id: str, inquiries: List[InquiryCreate], current_user: dict = Depends(get_current_user)):
+    if UserRole.PROCUREMENT not in current_user.get('roles', []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    request = await db.goods_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    if request['status'] != RequestStatus.PENDING_PROCUREMENT:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status")
+    
+    if len(inquiries) != 3:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Must provide exactly 3 inquiries")
+    
+    inquiry_objs = [Inquiry(**inq.model_dump()) for inq in inquiries]
+    
+    history_entry = RequestHistory(
+        action=ActionType.INQUIRIES_ADDED,
+        actor_id=current_user['user_id'],
+        actor_name=current_user['full_name'],
+        from_status=RequestStatus.PENDING_PROCUREMENT,
+        to_status=RequestStatus.PENDING_MANAGEMENT
+    )
+    
+    await db.goods_requests.update_one(
+        {"id": request_id},
+        {
+            "$set": {
+                "inquiries": [inq.model_dump() for inq in inquiry_objs],
+                "status": RequestStatus.PENDING_MANAGEMENT,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            },
+            "$push": {"history": {
+                **history_entry.model_dump(),
+                "timestamp": history_entry.timestamp.isoformat()
+            }}
+        }
+    )
+    
+    # Notify management users
+    management_users = await db.users.find({"roles": UserRole.MANAGEMENT}).to_list(100)
+    for user in management_users:
+        await create_notification(
+            user['id'],
+            request_id,
+            request['request_number'],
+            f"استعلام‌های درخواست {request['request_number']} آماده بررسی است"
+        )
+    
+    return {"message": "Inquiries added"}
+
+@api_router.post("/goods-requests/{request_id}/select-inquiry")
+async def select_inquiry(request_id: str, selection: InquirySelect, current_user: dict = Depends(get_current_user)):
+    if UserRole.MANAGEMENT not in current_user.get('roles', []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    request = await db.goods_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    if request['status'] != RequestStatus.PENDING_MANAGEMENT:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status")
+    
+    # Mark selected inquiry
+    inquiries = request['inquiries']
+    found = False
+    for inq in inquiries:
+        if inq['id'] == selection.inquiry_id:
+            inq['is_selected'] = True
+            found = True
+        else:
+            inq['is_selected'] = False
+    
+    if not found:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inquiry not found")
+    
+    history_entry = RequestHistory(
+        action=ActionType.APPROVED,
+        actor_id=current_user['user_id'],
+        actor_name=current_user['full_name'],
+        from_status=RequestStatus.PENDING_MANAGEMENT,
+        to_status=RequestStatus.PENDING_PURCHASE,
+        notes="استعلام برنده انتخاب شد"
+    )
+    
+    await db.goods_requests.update_one(
+        {"id": request_id},
+        {
+            "$set": {
+                "inquiries": inquiries,
+                "status": RequestStatus.PENDING_PURCHASE,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            },
+            "$push": {"history": {
+                **history_entry.model_dump(),
+                "timestamp": history_entry.timestamp.isoformat()
+            }}
+        }
+    )
+    
+    # Notify procurement to purchase
+    procurement_users = await db.users.find({"roles": UserRole.PROCUREMENT}).to_list(100)
+    for user in procurement_users:
+        await create_notification(
+            user['id'],
+            request_id,
+            request['request_number'],
+            f"درخواست {request['request_number']} تایید شد. آماده خرید"
+        )
+    
+    return {"message": "Inquiry selected"}
+
+@api_router.post("/goods-requests/{request_id}/receipts")
+async def add_receipt(request_id: str, receipt_data: ReceiptCreate, current_user: dict = Depends(get_current_user)):
+    if UserRole.PROCUREMENT not in current_user.get('roles', []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    request = await db.goods_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    if request['status'] not in [RequestStatus.PENDING_PURCHASE, RequestStatus.PENDING_RECEIPT]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status")
+    
+    receipt_number = await get_next_receipt_number()
+    receipt = Receipt(
+        receipt_number=receipt_number,
+        quantity=receipt_data.quantity,
+        unit_price=receipt_data.unit_price,
+        total_price=receipt_data.total_price
+    )
+    
+    history_entry = RequestHistory(
+        action=ActionType.RECEIPT_ADDED,
+        actor_id=current_user['user_id'],
+        actor_name=current_user['full_name'],
+        notes=f"رسید {receipt_number} ثبت شد"
+    )
+    
+    await db.goods_requests.update_one(
+        {"id": request_id},
+        {
+            "$set": {
+                "status": RequestStatus.PENDING_RECEIPT,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            },
+            "$push": {
+                "receipts": {
+                    **receipt.model_dump(),
+                    "created_at": receipt.created_at.isoformat()
+                },
+                "history": {
+                    **history_entry.model_dump(),
+                    "timestamp": history_entry.timestamp.isoformat()
+                }
+            }
+        }
+    )
+    
+    # Notify requester
+    await create_notification(
+        request['requester_id'],
+        request_id,
+        request['request_number'],
+        f"رسید جدید برای درخواست {request['request_number']} ثبت شد"
+    )
+    
+    return {"message": "Receipt added", "receipt_number": receipt_number}
+
+@api_router.post("/goods-requests/{request_id}/receipts/confirm-procurement")
+async def confirm_receipt_procurement(request_id: str, confirm: ReceiptConfirm, current_user: dict = Depends(get_current_user)):
+    if UserRole.PROCUREMENT not in current_user.get('roles', []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    request = await db.goods_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    receipts = request.get('receipts', [])
+    receipt_found = False
+    for receipt in receipts:
+        if receipt['id'] == confirm.receipt_id:
+            receipt['confirmed_by_procurement'] = True
+            receipt['procurement_confirmed_at'] = datetime.now(timezone.utc).isoformat()
+            receipt_found = True
+            break
+    
+    if not receipt_found:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt not found")
+    
+    await db.goods_requests.update_one(
+        {"id": request_id},
+        {"$set": {"receipts": receipts, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"message": "Receipt confirmed by procurement"}
+
+@api_router.post("/goods-requests/{request_id}/receipts/confirm-requester")
+async def confirm_receipt_requester(request_id: str, confirm: ReceiptConfirm, current_user: dict = Depends(get_current_user)):
+    request = await db.goods_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    if request['requester_id'] != current_user['user_id']:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    receipts = request.get('receipts', [])
+    receipt_found = False
+    for receipt in receipts:
+        if receipt['id'] == confirm.receipt_id:
+            receipt['confirmed_by_requester'] = True
+            receipt['requester_confirmed_at'] = datetime.now(timezone.utc).isoformat()
+            receipt_found = True
+            break
+    
+    if not receipt_found:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt not found")
+    
+    await db.goods_requests.update_one(
+        {"id": request_id},
+        {"$set": {"receipts": receipts, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    # Check if all receipts confirmed
+    all_confirmed = all(r['confirmed_by_procurement'] and r['confirmed_by_requester'] for r in receipts)
+    if all_confirmed:
+        await db.goods_requests.update_one(
+            {"id": request_id},
+            {"$set": {"status": RequestStatus.PENDING_INVOICE}}
+        )
+        # Notify procurement to upload invoice
+        procurement_users = await db.users.find({"roles": UserRole.PROCUREMENT}).to_list(100)
+        for user in procurement_users:
+            await create_notification(
+                user['id'],
+                request_id,
+                request['request_number'],
+                f"رسیدها تایید شد. لطفا فاکتور را بارگذاری کنید"
+            )
+    
+    return {"message": "Receipt confirmed by requester"}
+
+@api_router.post("/goods-requests/{request_id}/invoice")
+async def upload_invoice(request_id: str, invoice: InvoiceUpload, current_user: dict = Depends(get_current_user)):
+    if UserRole.PROCUREMENT not in current_user.get('roles', []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    request = await db.goods_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    if request['status'] != RequestStatus.PENDING_INVOICE:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status")
+    
+    history_entry = RequestHistory(
+        action=ActionType.INVOICE_UPLOADED,
+        actor_id=current_user['user_id'],
+        actor_name=current_user['full_name'],
+        notes="فاکتور بارگذاری شد"
+    )
+    
+    await db.goods_requests.update_one(
+        {"id": request_id},
+        {
+            "$set": {
+                "invoice_base64": invoice.invoice_base64,
+                "status": RequestStatus.PENDING_FINANCIAL,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            },
+            "$push": {"history": {
+                **history_entry.model_dump(),
+                "timestamp": history_entry.timestamp.isoformat()
+            }}
+        }
+    )
+    
+    # Notify financial users
+    financial_users = await db.users.find({"roles": UserRole.FINANCIAL}).to_list(100)
+    for user in financial_users:
+        await create_notification(
+            user['id'],
+            request_id,
+            request['request_number'],
+            f"فاکتور درخواست {request['request_number']} آماده تایید است"
+        )
+    
+    return {"message": "Invoice uploaded"}
+
+@api_router.post("/goods-requests/{request_id}/approve-financial")
+async def approve_financial(request_id: str, action: ActionRequest, current_user: dict = Depends(get_current_user)):
+    if UserRole.FINANCIAL not in current_user.get('roles', []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    request = await db.goods_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    if request['status'] != RequestStatus.PENDING_FINANCIAL:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status")
+    
+    history_entry = RequestHistory(
+        action=ActionType.COMPLETED,
+        actor_id=current_user['user_id'],
+        actor_name=current_user['full_name'],
+        from_status=RequestStatus.PENDING_FINANCIAL,
+        to_status=RequestStatus.COMPLETED,
+        notes=action.notes
+    )
+    
+    await db.goods_requests.update_one(
+        {"id": request_id},
+        {
+            "$set": {
+                "status": RequestStatus.COMPLETED,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            },
+            "$push": {"history": {
+                **history_entry.model_dump(),
+                "timestamp": history_entry.timestamp.isoformat()
+            }}
+        }
+    )
+    
+    # Notify requester
+    await create_notification(
+        request['requester_id'],
+        request_id,
+        request['request_number'],
+        f"درخواست {request['request_number']} تکمیل شد"
+    )
+    
+    return {"message": "Request completed"}
+
+@api_router.post("/goods-requests/{request_id}/reject")
+async def reject_request(request_id: str, action: ActionRequest, current_user: dict = Depends(get_current_user)):
+    request = await db.goods_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    if not action.notes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Rejection notes are required")
+    
+    # Determine previous status based on current status
+    status_map = {
+        RequestStatus.PENDING_PROCUREMENT: RequestStatus.DRAFT,
+        RequestStatus.PENDING_MANAGEMENT: RequestStatus.PENDING_PROCUREMENT,
+        RequestStatus.PENDING_PURCHASE: RequestStatus.PENDING_MANAGEMENT,
+        RequestStatus.PENDING_INVOICE: RequestStatus.PENDING_RECEIPT,
+        RequestStatus.PENDING_FINANCIAL: RequestStatus.PENDING_INVOICE
+    }
+    
+    current_status = request['status']
+    if current_status not in status_map:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot reject at this stage")
+    
+    previous_status = status_map[current_status]
+    
+    history_entry = RequestHistory(
+        action=ActionType.REJECTED,
+        actor_id=current_user['user_id'],
+        actor_name=current_user['full_name'],
+        from_status=current_status,
+        to_status=previous_status,
+        notes=action.notes
+    )
+    
+    await db.goods_requests.update_one(
+        {"id": request_id},
+        {
+            "$set": {
+                "status": previous_status,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            },
+            "$push": {"history": {
+                **history_entry.model_dump(),
+                "timestamp": history_entry.timestamp.isoformat()
+            }}
+        }
+    )
+    
+    # Notify relevant users
+    await create_notification(
+        request['requester_id'],
+        request_id,
+        request['request_number'],
+        f"درخواست {request['request_number']} رد شد"
+    )
+    
+    return {"message": "Request rejected"}
+
+# Notifications
+@api_router.get("/notifications")
+async def get_notifications(current_user: dict = Depends(get_current_user)):
+    notifications = await db.notifications.find(
+        {"user_id": current_user['user_id']},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return notifications
+
+@api_router.put("/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: str, current_user: dict = Depends(get_current_user)):
+    result = await db.notifications.update_one(
+        {"id": notification_id, "user_id": current_user['user_id']},
+        {"$set": {"is_read": True}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return {"message": "Notification marked as read"}
+
+# Reports
+@api_router.get("/reports/excel")
+async def export_excel(current_user: dict = Depends(get_current_user)):
+    user_roles = current_user.get('roles', [])
+    user_id = current_user['user_id']
+    
+    query = {}
+    if UserRole.ADMIN not in user_roles and UserRole.MANAGEMENT not in user_roles:
+        if UserRole.REQUESTER in user_roles:
+            query['requester_id'] = user_id
+    
+    requests = await db.goods_requests.find(query, {"_id": 0}).to_list(1000)
+    
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "گزارش درخواست‌ها"
+    
+    # Headers
+    headers = ["شناسه", "نام کالا", "تعداد", "مرکز هزینه", "متقاضی", "وضعیت", "تاریخ ایجاد"]
+    if UserRole.ADMIN in user_roles or UserRole.MANAGEMENT in user_roles:
+        headers.extend(["قیمت کل"])
+    
+    ws.append(headers)
+    
+    for request in requests:
+        row = [
+            request['request_number'],
+            request['item_name'],
+            request['quantity'],
+            request['cost_center'],
+            request['requester_name'],
+            request['status'],
+            str(request['created_at'])
+        ]
+        
+        if UserRole.ADMIN in user_roles or UserRole.MANAGEMENT in user_roles:
+            total_price = 0
+            if request.get('receipts'):
+                total_price = sum(r['total_price'] for r in request['receipts'])
+            row.append(total_price)
+        
+        ws.append(row)
+    
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=report.xlsx"}
+    )
+
+# Initialize admin user
+@app.on_event("startup")
+async def initialize_admin():
+    admin_exists = await db.users.find_one({"username": "admin"})
+    if not admin_exists:
+        admin = User(
+            username="admin",
+            full_name="مدیر سیستم",
+            password_hash=hash_password("admin123"),
+            roles=[UserRole.ADMIN]
+        )
+        doc = admin.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        await db.users.insert_one(doc)
+        logging.info("Admin user created: username=admin, password=admin123")
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -77,7 +991,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'

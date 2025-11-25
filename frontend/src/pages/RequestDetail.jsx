@@ -37,6 +37,14 @@ const RequestDetail = () => {
   });
   const [invoiceBase64, setInvoiceBase64] = useState('');
   const [rejectNotes, setRejectNotes] = useState('');
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    item_name: '',
+    quantity: '',
+    cost_center: '',
+    description: '',
+    image_base64: ''
+  });
 
   useEffect(() => {
     fetchRequest();

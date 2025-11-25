@@ -196,6 +196,34 @@ const RequestDetail = () => {
     }
   };
 
+  const handleEditImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditFormData({ ...editFormData, image_base64: reader.result });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleEditRequest = async () => {
+    try {
+      await axios.put(`${API}/goods-requests/${id}`, {
+        item_name: editFormData.item_name,
+        quantity: parseInt(editFormData.quantity),
+        cost_center: editFormData.cost_center,
+        description: editFormData.description,
+        image_base64: editFormData.image_base64
+      });
+      toast.success('درخواست ویرایش شد');
+      setShowEditModal(false);
+      fetchRequest();
+    } catch (error) {
+      toast.error('خطا در ویرایش درخواست');
+    }
+  };
+
   const statusConfig = {
     'draft': { label: 'پیش‌نویس', color: 'bg-gray-100 text-gray-800', icon: FileText },
     'pending_procurement': { label: 'در انتظار تامین', color: 'bg-blue-100 text-blue-800', icon: Clock },

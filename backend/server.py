@@ -930,9 +930,9 @@ async def export_excel(current_user: dict = Depends(get_current_user)):
     ws.title = "گزارش درخواست‌ها"
     
     # Headers
-    headers = ["شناسه", "نام کالا", "تعداد", "مرکز هزینه", "متقاضی", "وضعیت", "تاریخ ایجاد"]
-    if UserRole.ADMIN in user_roles or UserRole.MANAGEMENT in user_roles:
-        headers.extend(["قیمت کل"])
+    headers = ["شناسه", "نام کالا", "تعداد درخواستی", "مرکز هزینه", "متقاضی", "وضعیت", "تاریخ ایجاد"]
+    if UserRole.ADMIN in user_roles or UserRole.MANAGEMENT in user_roles or UserRole.FINANCIAL in user_roles or UserRole.PROCUREMENT in user_roles:
+        headers.extend(["تعداد خریداری شده", "قیمت کل خرید (ریال)"])
     
     ws.append(headers)
     
@@ -947,10 +947,13 @@ async def export_excel(current_user: dict = Depends(get_current_user)):
             str(request['created_at'])
         ]
         
-        if UserRole.ADMIN in user_roles or UserRole.MANAGEMENT in user_roles:
+        if UserRole.ADMIN in user_roles or UserRole.MANAGEMENT in user_roles or UserRole.FINANCIAL in user_roles or UserRole.PROCUREMENT in user_roles:
+            total_quantity = 0
             total_price = 0
             if request.get('receipts'):
+                total_quantity = sum(r['quantity'] for r in request['receipts'])
                 total_price = sum(r['total_price'] for r in request['receipts'])
+            row.append(total_quantity)
             row.append(total_price)
         
         ws.append(row)

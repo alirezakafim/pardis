@@ -54,6 +54,13 @@ const RequestDetail = () => {
     try {
       const response = await axios.get(`${API}/goods-requests/${id}`);
       setRequest(response.data);
+      setEditFormData({
+        item_name: response.data.item_name,
+        quantity: response.data.quantity,
+        cost_center: response.data.cost_center,
+        description: response.data.description || '',
+        image_base64: response.data.image_base64 || ''
+      });
     } catch (error) {
       toast.error('خطا در بارگذاری درخواست');
       navigate('/requests');

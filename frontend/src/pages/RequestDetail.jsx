@@ -237,6 +237,7 @@ const RequestDetail = () => {
   };
 
   const canSubmit = request?.status === 'draft' && request?.requester_id === user?.user_id;
+  const canEdit = request?.status === 'draft' && request?.requester_id === user?.user_id;
   const canAddInquiries = request?.status === 'pending_procurement' && user?.roles?.includes('procurement');
   const canSelectInquiry = request?.status === 'pending_management' && user?.roles?.includes('management');
   const canAddReceipt = ['pending_purchase', 'pending_receipt'].includes(request?.status) && user?.roles?.includes('procurement');

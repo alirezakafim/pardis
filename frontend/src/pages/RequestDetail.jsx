@@ -628,6 +628,66 @@ const RequestDetail = () => {
             </div>
           </DialogContent>
         </Dialog>
+
+        <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+          <DialogContent className="rtl max-w-2xl" dir="rtl">
+            <DialogHeader>
+              <DialogTitle>ویرایش درخواست</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>نام کالا</Label>
+                <Input
+                  value={editFormData.item_name}
+                  onChange={(e) => setEditFormData({ ...editFormData, item_name: e.target.value })}
+                  data-testid="edit-item-name-input"
+                />
+              </div>
+              <div>
+                <Label>تعداد</Label>
+                <Input
+                  type="number"
+                  value={editFormData.quantity}
+                  onChange={(e) => setEditFormData({ ...editFormData, quantity: e.target.value })}
+                  data-testid="edit-quantity-input"
+                />
+              </div>
+              <div>
+                <Label>مرکز هزینه</Label>
+                <Input
+                  value={editFormData.cost_center}
+                  onChange={(e) => setEditFormData({ ...editFormData, cost_center: e.target.value })}
+                  data-testid="edit-cost-center-input"
+                />
+              </div>
+              <div>
+                <Label>توضیحات</Label>
+                <Textarea
+                  value={editFormData.description}
+                  onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                  className="min-h-[100px]"
+                  data-testid="edit-description-input"
+                />
+              </div>
+              <div>
+                <Label>تصویر</Label>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={handleEditImageUpload} 
+                  className="block text-sm"
+                  data-testid="edit-image-upload"
+                />
+                {editFormData.image_base64 && (
+                  <img src={editFormData.image_base64} alt="Preview" className="mt-2 max-w-xs rounded-lg" />
+                )}
+              </div>
+              <Button onClick={handleEditRequest} className="w-full bg-amber-600 hover:bg-amber-700" data-testid="save-edit-button">
+                ذخیره تغییرات
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );

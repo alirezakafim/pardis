@@ -282,6 +282,11 @@ const RequestDetail = () => {
             </div>
           </div>
           <div className="flex gap-2">
+            {canEdit && (
+              <Button onClick={() => setShowEditModal(true)} className="bg-blue-600 hover:bg-blue-700" data-testid="edit-request-button">
+                ویرایش درخواست
+              </Button>
+            )}
             {canSubmit && (
               <Button onClick={handleSubmitRequest} className="bg-amber-600 hover:bg-amber-700" data-testid="submit-request-button">
                 ارسال درخواست

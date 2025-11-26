@@ -359,6 +359,37 @@ async def get_cost_centers(current_user: dict = Depends(get_current_user)):
         centers = [c.model_dump() for c in default_centers]
     return centers
 
+@api_router.post("/cost-centers")
+async def create_cost_center(center: CostCenter, current_user: dict = Depends(get_current_user)):
+    if UserRole.ADMIN not in current_user.get('roles', []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    await db.cost_centers.insert_one(center.model_dump())
+    return {"message": "Cost center created", "id": center.id}
+
+@api_router.put("/cost-centers/{center_id}")
+async def update_cost_center(center_id: str, name: str, name_en: str, current_user: dict = Depends(get_current_user)):
+    if UserRole.ADMIN not in current_user.get('roles', []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    result = await db.cost_centers.update_one(
+        {"id": center_id},
+        {"$set": {"name": name, "name_en": name_en}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return {"message": "Cost center updated"}
+
+@api_router.delete("/cost-centers/{center_id}")
+async def delete_cost_center(center_id: str, current_user: dict = Depends(get_current_user)):
+    if UserRole.ADMIN not in current_user.get('roles', []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    result = await db.cost_centers.delete_one({"id": center_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return {"message": "Cost center deleted"}
+
 # Goods Requests
 @api_router.post("/goods-requests")
 async def create_goods_request(request_data: GoodsRequestCreate, current_user: dict = Depends(get_current_user)):

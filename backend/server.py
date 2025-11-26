@@ -601,54 +601,130 @@ async def select_inquiry(request_id: str, selection: InquirySelect, current_user
     if request['status'] != RequestStatus.PENDING_MANAGEMENT:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status")
     
-    # Mark selected inquiry
-    inquiries = request['inquiries']
-    found = False
-    for inq in inquiries:
-        if inq['id'] == selection.inquiry_id:
-            inq['is_selected'] = True
-            found = True
-        else:
-            inq['is_selected'] = False
+    if selection.action == "approve":
+        # Mark selected inquiry
+        inquiries = request['inquiries']
+        found = False
+        for inq in inquiries:
+            if inq['id'] == selection.inquiry_id:
+                inq['is_selected'] = True
+                found = True
+            else:
+                inq['is_selected'] = False
+        
+        if not found:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inquiry not found")
+        
+        history_entry = RequestHistory(
+            action=ActionType.APPROVED,
+            actor_id=current_user['user_id'],
+            actor_name=current_user['full_name'],
+            from_status=RequestStatus.PENDING_MANAGEMENT,
+            to_status=RequestStatus.PENDING_PURCHASE,
+            notes="استعلام برنده انتخاب شد - تایید"
+        )
+        
+        await db.goods_requests.update_one(
+            {"id": request_id},
+            {
+                "$set": {
+                    "inquiries": inquiries,
+                    "status": RequestStatus.PENDING_PURCHASE,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                },
+                "$push": {"history": {
+                    **history_entry.model_dump(),
+                    "timestamp": history_entry.timestamp.isoformat()
+                }}
+            }
+        )
+        
+        # Notify procurement to purchase
+        procurement_users = await db.users.find({"roles": UserRole.PROCUREMENT}).to_list(100)
+        for user in procurement_users:
+            await create_notification(
+                user['id'],
+                request_id,
+                request['request_number'],
+                f"درخواست {request['request_number']} تایید شد. آماده خرید"
+            )
+        
+        return {"message": "Inquiry approved"}
     
-    if not found:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inquiry not found")
+    elif selection.action == "reject_with_edit":
+        # بازگشت به واحد تامین برای اصلاح
+        history_entry = RequestHistory(
+            action=ActionType.REJECTED,
+            actor_id=current_user['user_id'],
+            actor_name=current_user['full_name'],
+            from_status=RequestStatus.PENDING_MANAGEMENT,
+            to_status=RequestStatus.PENDING_PROCUREMENT,
+            notes="عدم تایید - ارجاع به واحد تامین برای اصلاح استعلام‌ها"
+        )
+        
+        await db.goods_requests.update_one(
+            {"id": request_id},
+            {
+                "$set": {
+                    "status": RequestStatus.PENDING_PROCUREMENT,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                },
+                "$push": {"history": {
+                    **history_entry.model_dump(),
+                    "timestamp": history_entry.timestamp.isoformat()
+                }}
+            }
+        )
+        
+        # Notify procurement
+        procurement_users = await db.users.find({"roles": UserRole.PROCUREMENT}).to_list(100)
+        for user in procurement_users:
+            await create_notification(
+                user['id'],
+                request_id,
+                request['request_number'],
+                f"درخواست {request['request_number']} نیاز به اصلاح استعلام‌ها دارد"
+            )
+        
+        return {"message": "Request sent back for inquiry revision"}
     
-    history_entry = RequestHistory(
-        action=ActionType.APPROVED,
-        actor_id=current_user['user_id'],
-        actor_name=current_user['full_name'],
-        from_status=RequestStatus.PENDING_MANAGEMENT,
-        to_status=RequestStatus.PENDING_PURCHASE,
-        notes="استعلام برنده انتخاب شد"
-    )
-    
-    await db.goods_requests.update_one(
-        {"id": request_id},
-        {
-            "$set": {
-                "inquiries": inquiries,
-                "status": RequestStatus.PENDING_PURCHASE,
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            },
-            "$push": {"history": {
-                **history_entry.model_dump(),
-                "timestamp": history_entry.timestamp.isoformat()
-            }}
-        }
-    )
-    
-    # Notify procurement to purchase
-    procurement_users = await db.users.find({"roles": UserRole.PROCUREMENT}).to_list(100)
-    for user in procurement_users:
+    elif selection.action == "reject_complete":
+        # رد کامل درخواست
+        history_entry = RequestHistory(
+            action=ActionType.REJECTED,
+            actor_id=current_user['user_id'],
+            actor_name=current_user['full_name'],
+            from_status=RequestStatus.PENDING_MANAGEMENT,
+            to_status=RequestStatus.REJECTED,
+            notes="عدم تایید کامل درخواست"
+        )
+        
+        await db.goods_requests.update_one(
+            {"id": request_id},
+            {
+                "$set": {
+                    "status": RequestStatus.REJECTED,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                },
+                "$push": {"history": {
+                    **history_entry.model_dump(),
+                    "timestamp": history_entry.timestamp.isoformat()
+                }}
+            }
+        )
+        
+        # Notify requester
         await create_notification(
-            user['id'],
+            request['requester_id'],
             request_id,
             request['request_number'],
-            f"درخواست {request['request_number']} تایید شد. آماده خرید"
+            f"درخواست {request['request_number']} رد شد"
         )
+        
+        return {"message": "Request completely rejected"}
     
-    return {"message": "Inquiry selected"}
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid action")
 
 @api_router.post("/goods-requests/{request_id}/receipts")
 async def add_receipt(request_id: str, receipt_data: ReceiptCreate, current_user: dict = Depends(get_current_user)):

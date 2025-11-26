@@ -122,11 +122,31 @@ const RequestDetail = () => {
 
   const handleSelectInquiry = async (inquiryId) => {
     try {
-      await axios.post(`${API}/goods-requests/${id}/select-inquiry`, { inquiry_id: inquiryId });
+      await axios.post(`${API}/goods-requests/${id}/select-inquiry`, { inquiry_id: inquiryId, action: 'approve' });
       toast.success('استعلام برنده انتخاب شد');
       fetchRequest();
     } catch (error) {
       toast.error('خطا در انتخاب استعلام');
+    }
+  };
+
+  const handleSelectInquiryWithAction = async (inquiryId, action) => {
+    try {
+      await axios.post(`${API}/goods-requests/${id}/select-inquiry`, { 
+        inquiry_id: inquiryId, 
+        action: action 
+      });
+      
+      const messages = {
+        'approve': 'استعلام تایید و به عنوان برنده انتخاب شد',
+        'reject_with_edit': 'درخواست برای اصلاح به واحد تامین بازگردانده شد',
+        'reject_complete': 'درخواست به طور کامل رد شد'
+      };
+      
+      toast.success(messages[action]);
+      fetchRequest();
+    } catch (error) {
+      toast.error('خطا در انجام عملیات');
     }
   };
 

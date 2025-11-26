@@ -21,6 +21,11 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from io import BytesIO
+from project_proposal import (
+    ProjectProposal, ProjectProposalCreate, ProjectProposalUpdate,
+    COOReview, AssignFeasibilityManager, RegisterProject,
+    ProposalStatus, ProposalActionType, ProposalHistory, ProjectType
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')

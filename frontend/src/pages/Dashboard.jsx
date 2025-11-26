@@ -77,6 +77,15 @@ const Dashboard = () => {
       color: 'from-green-500 to-emerald-500',
       show: true,
       testId: 'reports-card'
+    },
+    {
+      title: 'پیشنهاد پروژه',
+      description: 'ثبت و پیگیری پیشنهادات پروژه',
+      icon: Lightbulb,
+      action: () => navigate('/proposals'),
+      color: 'from-yellow-500 to-orange-500',
+      show: true,
+      testId: 'proposals-card'
     }
   ];
 

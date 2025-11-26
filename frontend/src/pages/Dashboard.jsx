@@ -5,7 +5,7 @@ import axios from 'axios';
 import Layout from '../components/Layout';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { FileText, Package, Users, FileCheck, Bell, TrendingUp } from 'lucide-react';
+import { FileText, Package, Users, FileCheck, Bell, TrendingUp, Lightbulb } from 'lucide-react';
 
 const Dashboard = () => {
   const { user } = useContext(AuthContext);

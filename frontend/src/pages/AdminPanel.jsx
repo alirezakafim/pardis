@@ -97,10 +97,13 @@ const AdminPanel = () => {
     requester: 'متقاضی',
     procurement: 'واحد تامین',
     financial: 'واحد مالی',
-    management: 'مدیریت'
+    management: 'مدیریت',
+    coo: 'مدیر ارشد عملیات',
+    dev_manager: 'مدیر توسعه و مهندسی',
+    project_control: 'کارشناس کنترل پروژه'
   };
 
-  const allRoles = ['admin', 'requester', 'procurement', 'financial', 'management'];
+  const allRoles = ['admin', 'requester', 'procurement', 'financial', 'management', 'coo', 'dev_manager', 'project_control'];
 
   return (
     <Layout>

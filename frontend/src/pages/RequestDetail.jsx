@@ -150,39 +150,6 @@ const RequestDetail = () => {
     }
   };
 
-  const handleSelectInquiryWithAction = async (inquiryId, action) => {
-    try {
-      let endpoint, successMessage;
-      
-      switch (action) {
-        case 'approve':
-          endpoint = 'select-inquiry';
-          successMessage = 'استعلام تایید و به عنوان برنده انتخاب شد';
-          break;
-        case 'reject_with_edit':
-          endpoint = 'reject-for-edit';
-          successMessage = 'درخواست برای اصلاح به متقاضی بازگردانده شد';
-          break;
-        case 'reject_complete':
-          endpoint = 'reject-complete';
-          successMessage = 'درخواست به طور کامل رد شد';
-          break;
-        default:
-          throw new Error('Invalid action');
-      }
-
-      const payload = action === 'approve' 
-        ? { inquiry_id: inquiryId }
-        : { inquiry_id: inquiryId, action };
-
-      await axios.post(`${API}/goods-requests/${id}/${endpoint}`, payload);
-      toast.success(successMessage);
-      fetchRequest();
-    } catch (error) {
-      toast.error('خطا در انجام عملیات');
-    }
-  };
-
   const handleAddReceipt = async () => {
     try {
       await axios.post(`${API}/goods-requests/${id}/receipts`, {

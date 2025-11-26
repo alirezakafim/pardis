@@ -112,6 +112,14 @@ const AdminPanel = () => {
           <div>
             <h1 className="text-3xl font-bold text-gray-800">پنل مدیریت</h1>
             <p className="text-gray-600 mt-1">مدیریت کاربران و نقش‌ها</p>
+            <Button 
+              onClick={() => navigate('/admin/cost-centers')} 
+              variant="outline"
+              className="mt-3 border-amber-300 text-amber-700 hover:bg-amber-50"
+              data-testid="manage-cost-centers-btn"
+            >
+              مدیریت مراکز هزینه
+            </Button>
           </div>
           <Dialog open={showModal} onOpenChange={setShowModal}>
             <DialogTrigger asChild>

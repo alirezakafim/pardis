@@ -261,6 +261,20 @@ async def get_next_receipt_number() -> str:
         )
         return f"R-{new_counter:05d}"
 
+async def get_next_proposal_number() -> str:
+    current_year = 1404
+    counter_doc = await db.counters.find_one({"type": "proposal_number", "year": current_year})
+    if not counter_doc:
+        await db.counters.insert_one({"type": "proposal_number", "year": current_year, "counter": 1})
+        return f"PP-{current_year}-1"
+    else:
+        new_counter = counter_doc['counter'] + 1
+        await db.counters.update_one(
+            {"type": "proposal_number", "year": current_year},
+            {"$set": {"counter": new_counter}}
+        )
+        return f"PP-{current_year}-{new_counter}"
+
 # ==================== Routes ====================
 
 # Auth Routes

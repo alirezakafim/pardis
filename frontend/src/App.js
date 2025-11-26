@@ -11,6 +11,10 @@ import CreateRequest from './pages/CreateRequest';
 import RequestList from './pages/RequestList';
 import RequestDetail from './pages/RequestDetail';
 import Reports from './pages/Reports';
+import CostCentersManagement from './pages/CostCentersManagement';
+import ProjectProposalList from './pages/ProjectProposalList';
+import CreateProposal from './pages/CreateProposal';
+import ProposalDetail from './pages/ProposalDetail';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;

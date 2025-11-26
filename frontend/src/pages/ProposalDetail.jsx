@@ -23,7 +23,7 @@ const ProposalDetail = () => {
   const [showCOOModal, setShowCOOModal] = useState(false);
   const [showDevManagerModal, setShowDevManagerModal] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [coo Review, setCOOReview] = useState({ is_aligned: true, notes: '' });
+  const [cooReview, setCOOReview] = useState({ is_aligned: true, notes: '' });
   const [assignment, setAssignment] = useState({ feasibility_manager_id: '', feasibility_manager_name: '', notes: '' });
   const [registration, setRegistration] = useState({ project_code: '', project_start_date: '', notes: '' });
   const [users, setUsers] = useState([]);

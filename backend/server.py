@@ -177,6 +177,7 @@ class InquiryCreate(BaseModel):
 
 class InquirySelect(BaseModel):
     inquiry_id: str
+    action: str  # "approve", "reject_with_edit", "reject_complete"
 
 class ActionRequest(BaseModel):
     notes: Optional[str] = None

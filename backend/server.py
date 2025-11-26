@@ -45,6 +45,9 @@ class UserRole(str, Enum):
     PROCUREMENT = "procurement"
     FINANCIAL = "financial"
     MANAGEMENT = "management"
+    COO = "coo"  # Chief Operating Officer - مدیر ارشد عملیات
+    DEV_MANAGER = "dev_manager"  # مدیر توسعه و مهندسی
+    PROJECT_CONTROL = "project_control"  # کارشناس کنترل پروژه
 
 class RequestStatus(str, Enum):
     DRAFT = "draft"

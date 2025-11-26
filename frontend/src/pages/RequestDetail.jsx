@@ -369,14 +369,34 @@ const RequestDetail = () => {
                       <img src={inq.image_base64} alt={`Inquiry ${index + 1}`} className="w-full rounded-lg mb-3" />
                     )}
                     {canSelectInquiry && !inq.is_selected && (
-                      <Button 
-                        onClick={() => handleSelectInquiry(inq.id)} 
-                        size="sm" 
-                        className="w-full bg-amber-600 hover:bg-amber-700"
-                        data-testid={`select-inquiry-${index}`}
-                      >
-                        انتخاب به عنوان برنده
-                      </Button>
+                      <div className="space-y-2 mt-3">
+                        <Button 
+                          onClick={() => handleSelectInquiryWithAction(inq.id, 'approve')} 
+                          size="sm" 
+                          className="w-full bg-green-600 hover:bg-green-700"
+                          data-testid={`approve-inquiry-${index}`}
+                        >
+                          تایید و انتخاب برنده
+                        </Button>
+                        <Button 
+                          onClick={() => handleSelectInquiryWithAction(inq.id, 'reject_with_edit')} 
+                          size="sm" 
+                          variant="outline"
+                          className="w-full border-yellow-500 text-yellow-700 hover:bg-yellow-50"
+                          data-testid={`reject-edit-inquiry-${index}`}
+                        >
+                          بازگشت برای اصلاح
+                        </Button>
+                        <Button 
+                          onClick={() => handleSelectInquiryWithAction(inq.id, 'reject_complete')} 
+                          size="sm" 
+                          variant="destructive"
+                          className="w-full"
+                          data-testid={`reject-complete-inquiry-${index}`}
+                        >
+                          رد کامل درخواست
+                        </Button>
+                      </div>
                     )}
                   </Card>
                 ))}

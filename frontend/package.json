@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@hassanmojab/react-modern-calendar-datepicker": "^3.1.7",
     "@hookform/resolvers": "^5.0.1",
     "@radix-ui/react-accordion": "^1.2.8",
     "@radix-ui/react-alert-dialog": "^1.1.11",
@@ -50,6 +51,7 @@
     "react-resizable-panels": "^3.0.1",
     "react-router-dom": "^7.5.1",
     "react-scripts": "5.0.1",
+    "react-time-picker": "^8.0.2",
     "react-toastify": "^11.0.5",
     "sonner": "^2.0.3",
     "tailwind-merge": "^3.2.0",

@@ -154,6 +154,7 @@ class GoodsRequest(BaseModel):
     item_name: str
     quantity: int
     cost_center: str
+    need_date: Optional[str] = None
     image_base64: Optional[str] = None
     description: Optional[str] = None
     status: RequestStatus = RequestStatus.DRAFT

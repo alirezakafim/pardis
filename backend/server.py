@@ -201,6 +201,8 @@ class ReceiptCreate(BaseModel):
 
 class ReceiptConfirm(BaseModel):
     receipt_id: str
+    receipt_date: str
+    receipt_time: str
 
 class InvoiceUpload(BaseModel):
     invoice_base64: str

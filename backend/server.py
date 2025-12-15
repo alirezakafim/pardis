@@ -177,6 +177,7 @@ class GoodsRequestUpdate(BaseModel):
     item_name: Optional[str] = None
     quantity: Optional[int] = None
     cost_center: Optional[str] = None
+    need_date: Optional[str] = None
     image_base64: Optional[str] = None
     description: Optional[str] = None
 

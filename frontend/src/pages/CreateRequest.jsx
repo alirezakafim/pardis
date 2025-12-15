@@ -23,9 +23,11 @@ const CreateRequest = () => {
     item_name: '',
     quantity: '',
     cost_center: '',
+    need_date: '',
     description: '',
     image_base64: ''
   });
+  const [selectedDay, setSelectedDay] = useState(null);
 
   useEffect(() => {
     fetchCostCenters();

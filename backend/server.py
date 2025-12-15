@@ -826,6 +826,8 @@ async def confirm_receipt_procurement(request_id: str, confirm: ReceiptConfirm, 
         if receipt['id'] == confirm.receipt_id:
             receipt['confirmed_by_procurement'] = True
             receipt['procurement_confirmed_at'] = datetime.now(timezone.utc).isoformat()
+            receipt['procurement_receipt_date'] = confirm.receipt_date
+            receipt['procurement_receipt_time'] = confirm.receipt_time
             receipt_found = True
             break
     

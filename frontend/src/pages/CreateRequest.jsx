@@ -62,10 +62,12 @@ const CreateRequest = () => {
     setLoading(true);
 
     try {
-      const response = await axios.post(`${API}/goods-requests`, {
+      const requestData = {
         ...formData,
-        quantity: parseInt(formData.quantity)
-      });
+        quantity: parseInt(formData.quantity),
+        need_date: selectedDay ? `${selectedDay.year}/${selectedDay.month}/${selectedDay.day}` : null
+      };
+      const response = await axios.post(`${API}/goods-requests`, requestData);
       toast.success(`درخواست با شناسه ${response.data.request_number} ایجاد شد`);
       
       // Ask if user wants to submit immediately

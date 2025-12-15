@@ -130,6 +130,10 @@ class Receipt(BaseModel):
     confirmed_by_requester: bool = False
     procurement_confirmed_at: Optional[datetime] = None
     requester_confirmed_at: Optional[datetime] = None
+    procurement_receipt_date: Optional[str] = None
+    procurement_receipt_time: Optional[str] = None
+    requester_receipt_date: Optional[str] = None
+    requester_receipt_time: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class RequestHistory(BaseModel):

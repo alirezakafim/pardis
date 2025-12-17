@@ -69,9 +69,21 @@ const RequestDetail = () => {
         item_name: response.data.item_name,
         quantity: response.data.quantity,
         cost_center: response.data.cost_center,
+        need_date: response.data.need_date || '',
         description: response.data.description || '',
         image_base64: response.data.image_base64 || ''
       });
+      
+      if (response.data.need_date) {
+        const parts = response.data.need_date.split('/');
+        if (parts.length === 3) {
+          setEditSelectedDay({ 
+            year: parseInt(parts[0]), 
+            month: parseInt(parts[1]), 
+            day: parseInt(parts[2]) 
+          });
+        }
+      }
     } catch (error) {
       toast.error('خطا در بارگذاری درخواست');
       navigate('/requests');

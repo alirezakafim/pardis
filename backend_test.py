@@ -590,7 +590,7 @@ class PersianPortalAPITester:
         # Test workflow history
         if success and 'history' in response:
             history = response['history']
-            expected_actions = ['created', 'submitted', 'payment_type_set', 'approved_dev_manager', 'completed']
+            expected_actions = ['created', 'submitted', 'payment_type_set', 'approved_by_dev_manager', 'completed']
             actual_actions = [h.get('action') for h in history]
             
             if all(action in actual_actions for action in expected_actions):

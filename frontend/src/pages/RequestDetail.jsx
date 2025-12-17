@@ -292,13 +292,16 @@ const RequestDetail = () => {
 
   const handleEditRequest = async () => {
     try {
-      await axios.put(`${API}/goods-requests/${id}`, {
+      const updateData = {
         item_name: editFormData.item_name,
         quantity: parseInt(editFormData.quantity),
         cost_center: editFormData.cost_center,
+        need_date: editSelectedDay ? `${editSelectedDay.year}/${editSelectedDay.month}/${editSelectedDay.day}` : null,
         description: editFormData.description,
         image_base64: editFormData.image_base64
-      });
+      };
+      
+      await axios.put(`${API}/goods-requests/${id}`, updateData);
       toast.success('درخواست ویرایش شد');
       setShowEditModal(false);
       fetchRequest();

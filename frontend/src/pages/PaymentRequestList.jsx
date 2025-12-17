@@ -38,9 +38,12 @@ const PaymentRequestList = () => {
     'rejected': { label: 'رد شده', color: 'bg-red-100 text-red-800', icon: XCircle }
   };
 
-  const reasonLabels = {
-    'advance': 'پیش‌پرداخت',
-    'on_account': 'علی‌الحساب'
+  const requestTypeLabels = {
+    'purchase': 'خرید کالا/خدمت',
+    'project': 'پروژه',
+    'petty_cash': 'تنخواه',
+    'salary': 'حقوق و دستمزد',
+    'other': 'سایر'
   };
 
   if (loading) {
@@ -104,12 +107,16 @@ const PaymentRequestList = () => {
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
                         <div>
-                          <p className="text-sm text-gray-500">مبلغ کل</p>
-                          <p className="font-bold text-amber-700">{request.total_amount?.toLocaleString()} ریال</p>
+                          <p className="text-sm text-gray-500">نوع درخواست</p>
+                          <p className="font-medium text-gray-800">
+                            {request.request_type === 'other' 
+                              ? request.request_type_other 
+                              : requestTypeLabels[request.request_type] || '-'}
+                          </p>
                         </div>
                         <div>
-                          <p className="text-sm text-gray-500">تعداد ردیف</p>
-                          <p className="font-medium text-gray-800">{request.payment_rows?.length || 0}</p>
+                          <p className="text-sm text-gray-500">مبلغ کل</p>
+                          <p className="font-bold text-amber-700">{request.total_amount?.toLocaleString()} ریال</p>
                         </div>
                         <div>
                           <p className="text-sm text-gray-500">درخواست‌دهنده</p>

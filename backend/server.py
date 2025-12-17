@@ -1463,21 +1463,30 @@ async def get_next_payment_number() -> str:
 async def create_payment_request(request_data: PaymentRequestCreate, current_user: dict = Depends(get_current_user)):
     payment_number = await get_next_payment_number()
     
-    # Create payment rows
-    payment_rows = []
-    for row in request_data.payment_rows:
-        payment_rows.append(PaymentRow(
-            amount=row.get('amount', 0),
-            reason=row.get('reason', PaymentReason.ADVANCE),
-            notes=row.get('notes')
-        ))
+    # Create payment row
+    row_data = request_data.payment_row
+    payment_row = PaymentRow(
+        amount=row_data.get('amount', 0),
+        invoice_contract_number=row_data.get('invoice_contract_number'),
+        reason=row_data.get('reason', PaymentReason.PREPAYMENT),
+        cost_center=row_data.get('cost_center'),
+        payment_method=row_data.get('payment_method'),
+        payment_method_other=row_data.get('payment_method_other'),
+        account_number=row_data.get('account_number'),
+        bank_name=row_data.get('bank_name'),
+        account_holder_name=row_data.get('account_holder_name'),
+        notes=row_data.get('notes')
+    )
     
     payment_request = PaymentRequest(
         request_number=payment_number,
         requester_id=current_user['user_id'],
         requester_name=current_user['full_name'],
+        request_type=request_data.request_type,
+        request_type_other=request_data.request_type_other,
         total_amount=request_data.total_amount,
-        payment_rows=payment_rows,
+        payment_row=payment_row,
+        attachment_base64=request_data.attachment_base64,
         status=PaymentRequestStatus.DRAFT,
         history=[PaymentRequestHistory(
             action="created",

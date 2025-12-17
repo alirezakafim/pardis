@@ -47,8 +47,9 @@ const Layout = ({ children }) => {
 
   const menuItems = [
     { name: 'داشبورد', path: '/', icon: Home, show: true },
-    { name: 'درخواست‌ها', path: '/requests', icon: Package, show: true },
+    { name: 'درخواست کالا', path: '/requests', icon: Package, show: true },
     { name: 'پیشنهاد پروژه', path: '/proposals', icon: Lightbulb, show: true },
+    { name: 'درخواست پرداخت', path: '/payments', icon: CreditCard, show: true },
     { name: 'پنل مدیریت', path: '/admin', icon: Users, show: user?.roles?.includes('admin') },
     { name: 'گزارش‌گیری', path: '/reports', icon: TrendingUp, show: true }
   ];

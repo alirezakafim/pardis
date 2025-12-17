@@ -88,6 +88,16 @@ button:active {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+/* Calendar z-index fix */
+.custom-calendar {
+  z-index: 50 !important;
+}
+
+/* Select dropdown z-index */
+[role="listbox"] {
+  z-index: 100 !important;
+}
+
 /* Input focus */
 input:focus, textarea:focus, select:focus {
   outline: none;

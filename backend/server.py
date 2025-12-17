@@ -1539,23 +1539,31 @@ async def update_payment_request(request_id: str, request_data: PaymentRequestCr
     if request['status'] != PaymentRequestStatus.DRAFT:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Can only edit draft requests")
     
-    # Update payment rows
-    payment_rows = []
-    for row in request_data.payment_rows:
-        payment_rows.append({
-            "id": str(uuid.uuid4()),
-            "amount": row.get('amount', 0),
-            "reason": row.get('reason', PaymentReason.ADVANCE),
-            "notes": row.get('notes'),
-            "payment_type": None,
-            "payment_date": None
-        })
+    # Update payment row
+    row_data = request_data.payment_row
+    payment_row = {
+        "id": str(uuid.uuid4()),
+        "amount": row_data.get('amount', 0),
+        "invoice_contract_number": row_data.get('invoice_contract_number'),
+        "reason": row_data.get('reason', PaymentReason.PREPAYMENT),
+        "cost_center": row_data.get('cost_center'),
+        "payment_method": row_data.get('payment_method'),
+        "payment_method_other": row_data.get('payment_method_other'),
+        "account_number": row_data.get('account_number'),
+        "bank_name": row_data.get('bank_name'),
+        "account_holder_name": row_data.get('account_holder_name'),
+        "notes": row_data.get('notes'),
+        "payment_date": None
+    }
     
     await db.payment_requests.update_one(
         {"id": request_id},
         {"$set": {
+            "request_type": request_data.request_type,
+            "request_type_other": request_data.request_type_other,
             "total_amount": request_data.total_amount,
-            "payment_rows": payment_rows,
+            "payment_row": payment_row,
+            "attachment_base64": request_data.attachment_base64,
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )

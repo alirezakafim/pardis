@@ -6,17 +6,15 @@ import { toast } from 'sonner';
 import Layout from '../components/Layout';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import DatePicker from '@hassanmojab/react-modern-calendar-datepicker';
 import '@hassanmojab/react-modern-calendar-datepicker/lib/DatePicker.css';
 import {
   CreditCard, Clock, CheckCircle, XCircle, DollarSign,
-  User, MessageSquare, FileText, Upload
+  User, MessageSquare, FileText, Download, Paperclip
 } from 'lucide-react';
 
 const PaymentRequestDetail = () => {
@@ -25,10 +23,8 @@ const PaymentRequestDetail = () => {
   const navigate = useNavigate();
   const [request, setRequest] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [showPaymentTypeModal, setShowPaymentTypeModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showProcessModal, setShowProcessModal] = useState(false);
-  const [paymentTypes, setPaymentTypes] = useState([]);
   const [rejectNotes, setRejectNotes] = useState('');
   const [processData, setProcessData] = useState({
     payment_date_obj: null,
@@ -44,11 +40,6 @@ const PaymentRequestDetail = () => {
     try {
       const response = await axios.get(`${API}/payment-requests/${id}`);
       setRequest(response.data);
-      // Initialize payment types
-      setPaymentTypes(response.data.payment_rows?.map(row => ({
-        id: row.id,
-        payment_type: row.payment_type || 'cash'
-      })) || []);
     } catch (error) {
       toast.error('خطا در بارگذاری درخواست');
       navigate('/payments');
@@ -67,16 +58,13 @@ const PaymentRequestDetail = () => {
     }
   };
 
-  const handleSetPaymentTypes = async () => {
+  const handleReviewFinancial = async () => {
     try {
-      await axios.post(`${API}/payment-requests/${id}/set-payment-types`, {
-        payment_rows: paymentTypes
-      });
-      toast.success('نوع پرداخت تعیین شد');
-      setShowPaymentTypeModal(false);
+      await axios.post(`${API}/payment-requests/${id}/review-financial`, {});
+      toast.success('درخواست بررسی شد');
       fetchRequest();
     } catch (error) {
-      toast.error('خطا در تعیین نوع پرداخت');
+      toast.error('خطا در بررسی درخواست');
     }
   };
 
@@ -147,19 +135,27 @@ const PaymentRequestDetail = () => {
     'rejected': { label: 'رد شده', color: 'bg-red-100 text-red-800', icon: XCircle }
   };
 
-  const reasonLabels = {
-    'advance': 'پیش‌پرداخت',
-    'on_account': 'علی‌الحساب'
+  const requestTypeLabels = {
+    'purchase': 'خرید کالا/خدمت',
+    'project': 'پروژه',
+    'petty_cash': 'تنخواه',
+    'salary': 'حقوق و دستمزد',
+    'other': 'سایر'
   };
 
-  const paymentTypeLabels = {
+  const reasonLabels = {
+    'prepayment': 'پیش‌پرداخت',
+    'settlement': 'تسویه'
+  };
+
+  const paymentMethodLabels = {
     'cash': 'نقدی',
     'check': 'چک',
-    'bank_transfer': 'واریز بانکی'
+    'other': 'سایر'
   };
 
   const canSubmit = request?.status === 'draft' && request?.requester_id === user?.user_id;
-  const canSetPaymentTypes = request?.status === 'pending_financial' && user?.roles?.includes('financial');
+  const canReviewFinancial = request?.status === 'pending_financial' && user?.roles?.includes('financial');
   const canApproveDevManager = request?.status === 'pending_dev_manager' && user?.roles?.includes('dev_manager');
   const canProcessPayment = request?.status === 'pending_payment' && user?.roles?.includes('financial');
 
@@ -172,6 +168,7 @@ const PaymentRequestDetail = () => {
   }
 
   const StatusIcon = statusConfig[request.status]?.icon || Clock;
+  const paymentRow = request.payment_row;
 
   return (
     <Layout>
@@ -202,7 +199,15 @@ const PaymentRequestDetail = () => {
         {/* Request Info */}
         <Card className="p-6 bg-white">
           <h2 className="text-xl font-bold text-gray-800 mb-4">اطلاعات درخواست</h2>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <p className="text-sm text-gray-600">نوع درخواست</p>
+              <p className="text-lg font-medium text-gray-800">
+                {request.request_type === 'other' 
+                  ? request.request_type_other 
+                  : requestTypeLabels[request.request_type] || '-'}
+              </p>
+            </div>
             <div>
               <p className="text-sm text-gray-600">مبلغ کل</p>
               <p className="text-2xl font-bold text-amber-700">{request.total_amount?.toLocaleString()} ریال</p>
@@ -217,56 +222,93 @@ const PaymentRequestDetail = () => {
                 {new Date(request.created_at).toLocaleDateString('fa-IR')}
               </p>
             </div>
-            <div>
-              <p className="text-sm text-gray-600">تعداد ردیف پرداخت</p>
-              <p className="text-lg font-medium text-gray-800">{request.payment_rows?.length || 0}</p>
-            </div>
           </div>
         </Card>
 
-        {/* Payment Rows */}
-        <Card className="p-6 bg-white">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-gray-800">ردیف‌های پرداخت</h2>
-            {canSetPaymentTypes && (
-              <Button onClick={() => setShowPaymentTypeModal(true)} className="bg-blue-600 hover:bg-blue-700" data-testid="set-payment-types-button">
-                تعیین نوع پرداخت
-              </Button>
-            )}
-          </div>
-          <div className="space-y-4">
-            {request.payment_rows?.map((row, index) => (
-              <Card key={row.id} className="p-4 border border-gray-200 bg-gray-50">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-600">مبلغ</p>
-                    <p className="font-bold text-gray-800">{row.amount?.toLocaleString()} ریال</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">علت پرداخت</p>
-                    <p className="font-medium text-gray-800">{reasonLabels[row.reason] || row.reason}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">نوع پرداخت</p>
-                    <p className="font-medium text-gray-800">
-                      {row.payment_type ? paymentTypeLabels[row.payment_type] : '-'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">تاریخ پرداخت</p>
-                    <p className="font-medium text-gray-800">{row.payment_date || '-'}</p>
-                  </div>
-                  {row.notes && (
-                    <div className="col-span-4">
-                      <p className="text-sm text-gray-600">توضیحات</p>
-                      <p className="text-gray-800">{row.notes}</p>
-                    </div>
-                  )}
+        {/* Payment Row Details */}
+        {paymentRow && (
+          <Card className="p-6 bg-white">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">اطلاعات پرداخت</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <p className="text-sm text-gray-600">مبلغ</p>
+                <p className="font-bold text-gray-800">{paymentRow.amount?.toLocaleString()} ریال</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">شماره فاکتور/قرارداد</p>
+                <p className="font-medium text-gray-800">{paymentRow.invoice_contract_number || '-'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">علت پرداخت</p>
+                <p className="font-medium text-gray-800">{reasonLabels[paymentRow.reason] || paymentRow.reason}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">مرکز هزینه</p>
+                <p className="font-medium text-gray-800">{paymentRow.cost_center || '-'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">روش پرداخت</p>
+                <p className="font-medium text-gray-800">
+                  {paymentRow.payment_method === 'other' 
+                    ? paymentRow.payment_method_other 
+                    : paymentMethodLabels[paymentRow.payment_method] || '-'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">شماره حساب</p>
+                <p className="font-medium text-gray-800">{paymentRow.account_number || '-'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">نام بانک</p>
+                <p className="font-medium text-gray-800">{paymentRow.bank_name || '-'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">نام صاحب حساب</p>
+                <p className="font-medium text-gray-800">{paymentRow.account_holder_name || '-'}</p>
+              </div>
+              {paymentRow.payment_date && (
+                <div>
+                  <p className="text-sm text-gray-600">تاریخ پرداخت</p>
+                  <p className="font-medium text-gray-800">{paymentRow.payment_date}</p>
                 </div>
-              </Card>
-            ))}
-          </div>
-        </Card>
+              )}
+              {paymentRow.notes && (
+                <div className="col-span-4">
+                  <p className="text-sm text-gray-600">توضیحات</p>
+                  <p className="text-gray-800">{paymentRow.notes}</p>
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
+
+        {/* Attachment */}
+        {request.attachment_base64 && (
+          <Card className="p-6 bg-white">
+            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <Paperclip className="w-5 h-5" />
+              فایل پیوست
+            </h2>
+            {request.attachment_base64.startsWith('data:image') ? (
+              <img src={request.attachment_base64} alt="Attachment" className="max-w-md rounded-lg border-2 border-gray-200" />
+            ) : (
+              <a href={request.attachment_base64} download className="flex items-center gap-2 text-blue-600 hover:text-blue-800">
+                <Download className="w-5 h-5" />
+                دانلود فایل پیوست
+              </a>
+            )}
+          </Card>
+        )}
+
+        {/* Financial Review */}
+        {canReviewFinancial && (
+          <Card className="p-6 bg-white">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">بررسی واحد مالی</h2>
+            <Button onClick={handleReviewFinancial} className="bg-blue-600 hover:bg-blue-700" data-testid="review-financial-button">
+              تایید و ارسال به مدیر توسعه
+            </Button>
+          </Card>
+        )}
 
         {/* Dev Manager Approval */}
         {canApproveDevManager && (
@@ -326,48 +368,6 @@ const PaymentRequestDetail = () => {
         </Card>
 
         {/* Modals */}
-        <Dialog open={showPaymentTypeModal} onOpenChange={setShowPaymentTypeModal}>
-          <DialogContent className="max-w-2xl rtl" dir="rtl">
-            <DialogHeader>
-              <DialogTitle>تعیین نوع پرداخت</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              {request.payment_rows?.map((row, index) => (
-                <Card key={row.id} className="p-4 border border-gray-200">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="font-bold">{row.amount?.toLocaleString()} ریال</p>
-                      <p className="text-sm text-gray-600">{reasonLabels[row.reason]}</p>
-                    </div>
-                    <div className="w-48">
-                      <Select
-                        value={paymentTypes.find(pt => pt.id === row.id)?.payment_type || 'cash'}
-                        onValueChange={(value) => {
-                          setPaymentTypes(paymentTypes.map(pt =>
-                            pt.id === row.id ? { ...pt, payment_type: value } : pt
-                          ));
-                        }}
-                      >
-                        <SelectTrigger data-testid={`payment-type-select-${index}`}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="cash">نقدی</SelectItem>
-                          <SelectItem value="check">چک</SelectItem>
-                          <SelectItem value="bank_transfer">واریز بانکی</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-              <Button onClick={handleSetPaymentTypes} className="w-full bg-blue-600 hover:bg-blue-700" data-testid="save-payment-types-button">
-                ذخیره
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-
         <Dialog open={showRejectModal} onOpenChange={setShowRejectModal}>
           <DialogContent className="rtl" dir="rtl">
             <DialogHeader>

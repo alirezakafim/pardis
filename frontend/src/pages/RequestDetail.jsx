@@ -37,6 +37,11 @@ const RequestDetail = () => {
     unit_price: '',
     total_price: ''
   });
+  const [confirmReceiptData, setConfirmReceiptData] = useState({
+    receipt_id: '',
+    receipt_date_obj: null,
+    receipt_time: ''
+  });
   const [invoiceBase64, setInvoiceBase64] = useState('');
   const [rejectNotes, setRejectNotes] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);

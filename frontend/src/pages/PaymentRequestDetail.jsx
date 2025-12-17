@@ -396,7 +396,7 @@ const PaymentRequestDetail = () => {
         <Dialog open={showRejectModal} onOpenChange={setShowRejectModal}>
           <DialogContent className="rtl" dir="rtl">
             <DialogHeader>
-              <DialogTitle>رد درخواست</DialogTitle>
+              <DialogTitle>رد درخواست توسط مدیر توسعه</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div>
@@ -411,6 +411,44 @@ const PaymentRequestDetail = () => {
               </div>
               <Button onClick={handleRejectDevManager} variant="destructive" className="w-full" data-testid="confirm-reject-button">
                 تایید رد درخواست
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showRejectFinancialModal} onOpenChange={setShowRejectFinancialModal}>
+          <DialogContent className="rtl" dir="rtl">
+            <DialogHeader>
+              <DialogTitle>رد درخواست توسط واحد مالی</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                با رد درخواست، آن به وضعیت پیش‌نویس برمی‌گردد و متقاضی می‌تواند آن را ویرایش کند.
+              </p>
+              <div>
+                <Label>دلیل رد (اجباری) <span className="text-red-500">*</span></Label>
+                <Textarea
+                  value={rejectFinancialNotes}
+                  onChange={(e) => setRejectFinancialNotes(e.target.value)}
+                  className="min-h-[100px]"
+                  placeholder="دلیل رد درخواست را وارد کنید"
+                  data-testid="reject-financial-notes-input"
+                />
+              </div>
+              <Button 
+                onClick={() => {
+                  if (!rejectFinancialNotes.trim()) {
+                    toast.error('دلیل رد اجباری است');
+                    return;
+                  }
+                  setRejectNotes(rejectFinancialNotes);
+                  handleRejectFinancial();
+                }} 
+                variant="destructive" 
+                className="w-full" 
+                data-testid="confirm-reject-financial-button"
+              >
+                رد و ارجاع به متقاضی
               </Button>
             </div>
           </DialogContent>

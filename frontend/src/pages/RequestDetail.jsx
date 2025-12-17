@@ -51,9 +51,11 @@ const RequestDetail = () => {
     item_name: '',
     quantity: '',
     cost_center: '',
+    need_date: '',
     description: '',
     image_base64: ''
   });
+  const [editSelectedDay, setEditSelectedDay] = useState(null);
 
   useEffect(() => {
     fetchRequest();

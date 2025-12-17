@@ -1443,6 +1443,344 @@ async def register_project(proposal_id: str, registration: RegisterProject, curr
     
     return {"message": "Project registered successfully", "project_code": registration.project_code}
 
+# ==================== Payment Request Endpoints ====================
+async def get_next_payment_number() -> str:
+    current_year = 1404
+    counter_doc = await db.counters.find_one({"type": "payment_number", "year": current_year})
+    if not counter_doc:
+        await db.counters.insert_one({"type": "payment_number", "year": current_year, "counter": 1})
+        return f"PAY-{current_year}-1"
+    else:
+        new_counter = counter_doc['counter'] + 1
+        await db.counters.update_one(
+            {"type": "payment_number", "year": current_year},
+            {"$set": {"counter": new_counter}}
+        )
+        return f"PAY-{current_year}-{new_counter}"
+
+@api_router.post("/payment-requests")
+async def create_payment_request(request_data: PaymentRequestCreate, current_user: dict = Depends(get_current_user)):
+    payment_number = await get_next_payment_number()
+    
+    # Create payment rows
+    payment_rows = []
+    for row in request_data.payment_rows:
+        payment_rows.append(PaymentRow(
+            amount=row.get('amount', 0),
+            reason=row.get('reason', PaymentReason.ADVANCE),
+            notes=row.get('notes')
+        ))
+    
+    payment_request = PaymentRequest(
+        request_number=payment_number,
+        requester_id=current_user['user_id'],
+        requester_name=current_user['full_name'],
+        total_amount=request_data.total_amount,
+        payment_rows=payment_rows,
+        status=PaymentRequestStatus.DRAFT,
+        history=[PaymentRequestHistory(
+            action="created",
+            actor_id=current_user['user_id'],
+            actor_name=current_user['full_name']
+        )]
+    )
+    
+    doc = payment_request.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    for i, hist in enumerate(doc['history']):
+        doc['history'][i]['timestamp'] = hist['timestamp'].isoformat()
+    
+    await db.payment_requests.insert_one(doc)
+    
+    return {"message": "Payment request created", "request_id": payment_request.id, "request_number": payment_number}
+
+@api_router.get("/payment-requests")
+async def get_payment_requests(current_user: dict = Depends(get_current_user)):
+    user_roles = current_user.get('roles', [])
+    user_id = current_user['user_id']
+    
+    query = {}
+    if UserRole.ADMIN not in user_roles:
+        special_roles = [UserRole.FINANCIAL, UserRole.DEV_MANAGER]
+        has_special_role = any(role in user_roles for role in special_roles)
+        if not has_special_role:
+            query['requester_id'] = user_id
+    
+    requests = await db.payment_requests.find(query, {"_id": 0}).to_list(1000)
+    return requests
+
+@api_router.get("/payment-requests/{request_id}")
+async def get_payment_request(request_id: str, current_user: dict = Depends(get_current_user)):
+    request = await db.payment_requests.find_one({"id": request_id}, {"_id": 0})
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return request
+
+@api_router.put("/payment-requests/{request_id}")
+async def update_payment_request(request_id: str, request_data: PaymentRequestCreate, current_user: dict = Depends(get_current_user)):
+    request = await db.payment_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    if request['requester_id'] != current_user['user_id']:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    if request['status'] != PaymentRequestStatus.DRAFT:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Can only edit draft requests")
+    
+    # Update payment rows
+    payment_rows = []
+    for row in request_data.payment_rows:
+        payment_rows.append({
+            "id": str(uuid.uuid4()),
+            "amount": row.get('amount', 0),
+            "reason": row.get('reason', PaymentReason.ADVANCE),
+            "notes": row.get('notes'),
+            "payment_type": None,
+            "payment_date": None
+        })
+    
+    await db.payment_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "total_amount": request_data.total_amount,
+            "payment_rows": payment_rows,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    return {"message": "Payment request updated"}
+
+@api_router.post("/payment-requests/{request_id}/submit")
+async def submit_payment_request(request_id: str, current_user: dict = Depends(get_current_user)):
+    request = await db.payment_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    if request['requester_id'] != current_user['user_id']:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    if request['status'] != PaymentRequestStatus.DRAFT:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Request already submitted")
+    
+    history_entry = {
+        "action": "submitted",
+        "actor_id": current_user['user_id'],
+        "actor_name": current_user['full_name'],
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.payment_requests.update_one(
+        {"id": request_id},
+        {
+            "$set": {
+                "status": PaymentRequestStatus.PENDING_FINANCIAL,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            },
+            "$push": {"history": history_entry}
+        }
+    )
+    
+    # Notify financial users
+    financial_users = await db.users.find({"roles": UserRole.FINANCIAL}).to_list(100)
+    for user in financial_users:
+        await create_notification(
+            user['id'],
+            request_id,
+            request['request_number'],
+            f"درخواست پرداخت جدید از {current_user['full_name']}"
+        )
+    
+    return {"message": "Payment request submitted"}
+
+@api_router.post("/payment-requests/{request_id}/set-payment-types")
+async def set_payment_types(request_id: str, data: PaymentRowUpdate, current_user: dict = Depends(get_current_user)):
+    if UserRole.FINANCIAL not in current_user.get('roles', []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    request = await db.payment_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    if request['status'] != PaymentRequestStatus.PENDING_FINANCIAL:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status")
+    
+    # Update payment types for each row
+    payment_rows = request.get('payment_rows', [])
+    for update_row in data.payment_rows:
+        for row in payment_rows:
+            if row['id'] == update_row.get('id'):
+                row['payment_type'] = update_row.get('payment_type')
+    
+    history_entry = {
+        "action": "payment_type_set",
+        "actor_id": current_user['user_id'],
+        "actor_name": current_user['full_name'],
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "notes": "نوع پرداخت تعیین شد"
+    }
+    
+    await db.payment_requests.update_one(
+        {"id": request_id},
+        {
+            "$set": {
+                "payment_rows": payment_rows,
+                "status": PaymentRequestStatus.PENDING_DEV_MANAGER,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            },
+            "$push": {"history": history_entry}
+        }
+    )
+    
+    # Notify dev manager users
+    dev_manager_users = await db.users.find({"roles": UserRole.DEV_MANAGER}).to_list(100)
+    for user in dev_manager_users:
+        await create_notification(
+            user['id'],
+            request_id,
+            request['request_number'],
+            f"درخواست پرداخت {request['request_number']} آماده تایید است"
+        )
+    
+    return {"message": "Payment types set"}
+
+@api_router.post("/payment-requests/{request_id}/approve-dev-manager")
+async def approve_payment_dev_manager(request_id: str, action: ActionRequest, current_user: dict = Depends(get_current_user)):
+    if UserRole.DEV_MANAGER not in current_user.get('roles', []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    request = await db.payment_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    if request['status'] != PaymentRequestStatus.PENDING_DEV_MANAGER:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status")
+    
+    history_entry = {
+        "action": "approved_by_dev_manager",
+        "actor_id": current_user['user_id'],
+        "actor_name": current_user['full_name'],
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "notes": action.notes or "تایید شد توسط مدیر توسعه"
+    }
+    
+    await db.payment_requests.update_one(
+        {"id": request_id},
+        {
+            "$set": {
+                "status": PaymentRequestStatus.PENDING_PAYMENT,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            },
+            "$push": {"history": history_entry}
+        }
+    )
+    
+    # Notify financial users for final payment
+    financial_users = await db.users.find({"roles": UserRole.FINANCIAL}).to_list(100)
+    for user in financial_users:
+        await create_notification(
+            user['id'],
+            request_id,
+            request['request_number'],
+            f"درخواست پرداخت {request['request_number']} تایید شد - آماده پرداخت"
+        )
+    
+    return {"message": "Payment approved by dev manager"}
+
+@api_router.post("/payment-requests/{request_id}/reject-dev-manager")
+async def reject_payment_dev_manager(request_id: str, action: ActionRequest, current_user: dict = Depends(get_current_user)):
+    if UserRole.DEV_MANAGER not in current_user.get('roles', []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    request = await db.payment_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    if request['status'] != PaymentRequestStatus.PENDING_DEV_MANAGER:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status")
+    
+    history_entry = {
+        "action": "rejected_by_dev_manager",
+        "actor_id": current_user['user_id'],
+        "actor_name": current_user['full_name'],
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "notes": action.notes or "رد شد"
+    }
+    
+    await db.payment_requests.update_one(
+        {"id": request_id},
+        {
+            "$set": {
+                "status": PaymentRequestStatus.REJECTED,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            },
+            "$push": {"history": history_entry}
+        }
+    )
+    
+    # Notify requester
+    await create_notification(
+        request['requester_id'],
+        request_id,
+        request['request_number'],
+        f"درخواست پرداخت {request['request_number']} رد شد"
+    )
+    
+    return {"message": "Payment rejected"}
+
+class FinalPaymentData(BaseModel):
+    payment_date: str
+    invoice_base64: Optional[str] = None
+    notes: Optional[str] = None
+
+@api_router.post("/payment-requests/{request_id}/process-payment")
+async def process_payment(request_id: str, data: FinalPaymentData, current_user: dict = Depends(get_current_user)):
+    if UserRole.FINANCIAL not in current_user.get('roles', []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    request = await db.payment_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    if request['status'] != PaymentRequestStatus.PENDING_PAYMENT:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status")
+    
+    # Update payment date for all rows
+    payment_rows = request.get('payment_rows', [])
+    for row in payment_rows:
+        row['payment_date'] = data.payment_date
+    
+    history_entry = {
+        "action": "completed",
+        "actor_id": current_user['user_id'],
+        "actor_name": current_user['full_name'],
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "notes": data.notes or "پرداخت انجام شد"
+    }
+    
+    await db.payment_requests.update_one(
+        {"id": request_id},
+        {
+            "$set": {
+                "payment_rows": payment_rows,
+                "invoice_base64": data.invoice_base64,
+                "status": PaymentRequestStatus.COMPLETED,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            },
+            "$push": {"history": history_entry}
+        }
+    )
+    
+    # Notify requester
+    await create_notification(
+        request['requester_id'],
+        request_id,
+        request['request_number'],
+        f"درخواست پرداخت {request['request_number']} تکمیل شد"
+    )
+    
+    return {"message": "Payment completed"}
+
 # Initialize admin user
 @app.on_event("startup")
 async def initialize_admin():

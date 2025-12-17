@@ -1755,10 +1755,10 @@ async def process_payment(request_id: str, data: FinalPaymentData, current_user:
     if request['status'] != PaymentRequestStatus.PENDING_PAYMENT:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status")
     
-    # Update payment date for all rows
-    payment_rows = request.get('payment_rows', [])
-    for row in payment_rows:
-        row['payment_date'] = data.payment_date
+    # Update payment date for payment row
+    payment_row = request.get('payment_row')
+    if payment_row:
+        payment_row['payment_date'] = data.payment_date
     
     history_entry = {
         "action": "completed",
@@ -1772,7 +1772,7 @@ async def process_payment(request_id: str, data: FinalPaymentData, current_user:
         {"id": request_id},
         {
             "$set": {
-                "payment_rows": payment_rows,
+                "payment_row": payment_row,
                 "invoice_base64": data.invoice_base64,
                 "status": PaymentRequestStatus.COMPLETED,
                 "updated_at": datetime.now(timezone.utc).isoformat()

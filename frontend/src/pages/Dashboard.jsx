@@ -86,6 +86,15 @@ const Dashboard = () => {
       color: 'from-yellow-500 to-orange-500',
       show: true,
       testId: 'proposals-card'
+    },
+    {
+      title: 'درخواست پرداخت',
+      description: 'ثبت و پیگیری درخواست‌های پرداخت',
+      icon: CreditCard,
+      action: () => navigate('/payments'),
+      color: 'from-teal-500 to-cyan-500',
+      show: true,
+      testId: 'payments-card'
     }
   ];
 

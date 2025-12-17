@@ -141,7 +141,24 @@ class PersianPortalAPITester:
                 else:
                     self.log_test(f"Login {user_data['username']}", False, f"Login failed: {login_response}")
             else:
-                self.log_test(f"Create {user_data['username']}", False, f"Creation failed: {response}")
+                # If user already exists, try to login
+                if "already exists" in str(response):
+                    login_success, login_response = self.make_request(
+                        'POST', 'auth/login',
+                        data={"username": user_data["username"], "password": user_data["password"]}
+                    )
+                    
+                    if login_success and 'token' in login_response:
+                        self.test_users[user_data["username"]] = {
+                            "token": login_response['token'],
+                            "user_data": login_response['user'],
+                            "roles": user_data["roles"]
+                        }
+                        self.log_test(f"Login Existing {user_data['username']}", True)
+                    else:
+                        self.log_test(f"Login Existing {user_data['username']}", False, f"Login failed: {login_response}")
+                else:
+                    self.log_test(f"Create {user_data['username']}", False, f"Creation failed: {response}")
 
         # Test getting users list
         success, response = self.make_request(

@@ -606,11 +606,7 @@ const RequestDetail = () => {
                       <Input
                         type="number"
                         value={inq.unit_price}
-                        onChange={(e) => {
-                          const newInquiries = [...inquiries];
-                          newInquiries[index].unit_price = e.target.value;
-                          setInquiries(newInquiries);
-                        }}
+                        onChange={(e) => calculateInquiryTotal(index, 'unit_price', e.target.value)}
                         data-testid={`inquiry-unit-price-${index}`}
                       />
                     </div>
@@ -619,11 +615,7 @@ const RequestDetail = () => {
                       <Input
                         type="number"
                         value={inq.quantity}
-                        onChange={(e) => {
-                          const newInquiries = [...inquiries];
-                          newInquiries[index].quantity = e.target.value;
-                          setInquiries(newInquiries);
-                        }}
+                        onChange={(e) => calculateInquiryTotal(index, 'quantity', e.target.value)}
                         data-testid={`inquiry-quantity-${index}`}
                       />
                     </div>
@@ -632,11 +624,8 @@ const RequestDetail = () => {
                       <Input
                         type="number"
                         value={inq.total_price}
-                        onChange={(e) => {
-                          const newInquiries = [...inquiries];
-                          newInquiries[index].total_price = e.target.value;
-                          setInquiries(newInquiries);
-                        }}
+                        disabled
+                        className="bg-gray-100"
                         data-testid={`inquiry-total-price-${index}`}
                       />
                     </div>

@@ -1654,6 +1654,50 @@ async def review_financial(request_id: str, data: ActionRequest, current_user: d
     
     return {"message": "Payment reviewed by financial"}
 
+@api_router.post("/payment-requests/{request_id}/reject-financial")
+async def reject_financial(request_id: str, data: ActionRequest, current_user: dict = Depends(get_current_user)):
+    if UserRole.FINANCIAL not in current_user.get('roles', []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    request = await db.payment_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    if request['status'] != PaymentRequestStatus.PENDING_FINANCIAL:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status")
+    
+    if not data.notes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Rejection notes are required")
+    
+    history_entry = {
+        "action": "rejected_by_financial",
+        "actor_id": current_user['user_id'],
+        "actor_name": current_user['full_name'],
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "notes": data.notes
+    }
+    
+    await db.payment_requests.update_one(
+        {"id": request_id},
+        {
+            "$set": {
+                "status": PaymentRequestStatus.DRAFT,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            },
+            "$push": {"history": history_entry}
+        }
+    )
+    
+    # Notify requester
+    await create_notification(
+        request['requester_id'],
+        request_id,
+        request['request_number'],
+        f"درخواست پرداخت {request['request_number']} توسط واحد مالی رد شد - لطفاً اصلاح کنید"
+    )
+    
+    return {"message": "Payment rejected by financial"}
+
 @api_router.post("/payment-requests/{request_id}/approve-dev-manager")
 async def approve_payment_dev_manager(request_id: str, action: ActionRequest, current_user: dict = Depends(get_current_user)):
     if UserRole.DEV_MANAGER not in current_user.get('roles', []):

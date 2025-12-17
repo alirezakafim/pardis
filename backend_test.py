@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 class PersianPortalAPITester:
-    def __init__(self, base_url="https://workflow-hub-124.preview.emergentagent.com/api"):
+    def __init__(self, base_url="https://pardis-workflow.preview.emergentagent.com/api"):
         self.base_url = base_url
         self.admin_token = None
         self.test_users = {}

@@ -173,13 +173,28 @@ const RequestDetail = () => {
     }
   };
 
-  const handleConfirmReceipt = async (receiptId, type) => {
+  const handleConfirmReceipt = async (type) => {
+    const { receipt_id, receipt_date_obj, receipt_time } = confirmReceiptData;
+    
+    if (!receipt_date_obj || !receipt_time) {
+      toast.error('لطفاً تاریخ و ساعت رسید را وارد کنید');
+      return;
+    }
+
     try {
       const endpoint = type === 'procurement' 
         ? 'receipts/confirm-procurement' 
         : 'receipts/confirm-requester';
-      await axios.post(`${API}/goods-requests/${id}/${endpoint}`, { receipt_id: receiptId });
+      
+      const receipt_date = `${receipt_date_obj.year}/${receipt_date_obj.month}/${receipt_date_obj.day}`;
+      
+      await axios.post(`${API}/goods-requests/${id}/${endpoint}`, { 
+        receipt_id, 
+        receipt_date,
+        receipt_time 
+      });
       toast.success('رسید تایید شد');
+      setShowConfirmReceiptModal(false);
       fetchRequest();
     } catch (error) {
       toast.error('خطا در تایید رسید');

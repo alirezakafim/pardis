@@ -112,6 +112,31 @@ const RequestDetail = () => {
     }
   };
 
+  const calculateInquiryTotal = (index, field, value) => {
+    const newInquiries = [...inquiries];
+    newInquiries[index][field] = value;
+    
+    if (field === 'unit_price' || field === 'quantity') {
+      const unitPrice = parseFloat(newInquiries[index].unit_price) || 0;
+      const quantity = parseInt(newInquiries[index].quantity) || 0;
+      newInquiries[index].total_price = (unitPrice * quantity).toString();
+    }
+    
+    setInquiries(newInquiries);
+  };
+
+  const calculateReceiptTotal = (field, value) => {
+    const newData = { ...receiptData, [field]: value };
+    
+    if (field === 'unit_price' || field === 'quantity') {
+      const unitPrice = parseFloat(newData.unit_price) || 0;
+      const quantity = parseInt(newData.quantity) || 0;
+      newData.total_price = (unitPrice * quantity).toString();
+    }
+    
+    setReceiptData(newData);
+  };
+
   const handleAddInquiries = async () => {
     try {
       const formattedInquiries = inquiries.map(inq => ({

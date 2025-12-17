@@ -45,6 +45,8 @@ const RequestDetail = () => {
   const [invoiceBase64, setInvoiceBase64] = useState('');
   const [rejectNotes, setRejectNotes] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showConfirmReceiptModal, setShowConfirmReceiptModal] = useState(false);
+  const [confirmType, setConfirmType] = useState('');
   const [editFormData, setEditFormData] = useState({
     item_name: '',
     quantity: '',

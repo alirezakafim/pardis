@@ -646,6 +646,7 @@ class PersianPortalAPITester:
         self.test_user_management()
         self.test_cost_centers()
         self.test_goods_request_workflow()
+        self.test_payment_request_workflow()
         self.test_notifications()
         self.test_reports()
         self.test_role_based_access()

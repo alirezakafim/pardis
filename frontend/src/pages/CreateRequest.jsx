@@ -154,6 +154,25 @@ const CreateRequest = () => {
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="need_date" className="text-gray-700 font-medium">
+                تاریخ ضرورت نیاز <span className="text-red-500">*</span>
+              </Label>
+              <div className="relative">
+                <DatePicker
+                  value={selectedDay}
+                  onChange={setSelectedDay}
+                  locale="fa"
+                  calendarClassName="custom-calendar"
+                  inputPlaceholder="انتخاب تاریخ"
+                  inputClassName="w-full px-4 py-2 border border-gray-300 rounded-md focus:border-amber-500 focus:ring-amber-500 bg-white"
+                  wrapperClassName="w-full"
+                  colorPrimary="#d97706"
+                  shouldHighlightWeekends
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="description" className="text-gray-700 font-medium">
                 توضیحات (اختیاری)
               </Label>

@@ -823,6 +823,18 @@ const RequestDetail = () => {
                 />
               </div>
               <div>
+                <Label>تاریخ ضرورت نیاز</Label>
+                <DatePicker
+                  value={editSelectedDay}
+                  onChange={setEditSelectedDay}
+                  locale="fa"
+                  inputPlaceholder="انتخاب تاریخ"
+                  inputClassName="w-full px-4 py-2 border border-gray-300 rounded-md focus:border-amber-500 bg-white"
+                  colorPrimary="#d97706"
+                  shouldHighlightWeekends
+                />
+              </div>
+              <div>
                 <Label>توضیحات</Label>
                 <Textarea
                   value={editFormData.description}

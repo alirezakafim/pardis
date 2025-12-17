@@ -324,9 +324,14 @@ const PaymentRequestDetail = () => {
         {canReviewFinancial && (
           <Card className="p-6 bg-white">
             <h2 className="text-xl font-bold text-gray-800 mb-4">بررسی واحد مالی</h2>
-            <Button onClick={handleReviewFinancial} className="bg-blue-600 hover:bg-blue-700" data-testid="review-financial-button">
-              تایید و ارسال به مدیر توسعه
-            </Button>
+            <div className="flex gap-4">
+              <Button onClick={handleReviewFinancial} className="bg-green-600 hover:bg-green-700" data-testid="review-financial-button">
+                تایید و ارسال به مدیر توسعه
+              </Button>
+              <Button onClick={() => setShowRejectFinancialModal(true)} variant="destructive" data-testid="reject-financial-button">
+                رد و ارجاع به متقاضی
+              </Button>
+            </div>
           </Card>
         )}
 

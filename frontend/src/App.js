@@ -88,6 +88,9 @@ function App() {
           <Route path="/proposals" element={user ? <ProjectProposalList /> : <Navigate to="/login" />} />
           <Route path="/proposals/new" element={user ? <CreateProposal /> : <Navigate to="/login" />} />
           <Route path="/proposals/:id" element={user ? <ProposalDetail /> : <Navigate to="/login" />} />
+          <Route path="/payments" element={user ? <PaymentRequestList /> : <Navigate to="/login" />} />
+          <Route path="/payments/new" element={user ? <CreatePaymentRequest /> : <Navigate to="/login" />} />
+          <Route path="/payments/:id" element={user ? <PaymentRequestDetail /> : <Navigate to="/login" />} />
         </Routes>
       </BrowserRouter>
     </AuthContext.Provider>

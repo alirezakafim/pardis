@@ -24,8 +24,10 @@ const PaymentRequestDetail = () => {
   const [request, setRequest] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showRejectFinancialModal, setShowRejectFinancialModal] = useState(false);
   const [showProcessModal, setShowProcessModal] = useState(false);
   const [rejectNotes, setRejectNotes] = useState('');
+  const [rejectFinancialNotes, setRejectFinancialNotes] = useState('');
   const [processData, setProcessData] = useState({
     payment_date_obj: null,
     invoice_base64: '',

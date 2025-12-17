@@ -391,6 +391,217 @@ class PersianPortalAPITester:
         except Exception as e:
             self.log_test("Excel Export", False, f"Exception: {str(e)}")
 
+    def test_payment_request_workflow(self):
+        """Test complete Payment Request workflow as specified in review request"""
+        print("\n💰 Testing Complete Payment Request Workflow...")
+        
+        # Ensure admin has all required roles for testing
+        if not self.admin_token:
+            self.log_test("Payment Workflow - Admin Token", False, "No admin token available")
+            return False
+
+        # Step 1: Create Payment Request
+        payment_data = {
+            "total_amount": 100000000,
+            "payment_rows": [
+                {
+                    "amount": 60000000,
+                    "reason": "advance",
+                    "notes": "پیش‌پرداخت"
+                },
+                {
+                    "amount": 40000000,
+                    "reason": "on_account", 
+                    "notes": "علی‌الحساب"
+                }
+            ]
+        }
+
+        success, response = self.make_request(
+            'POST', 'payment-requests',
+            data=payment_data,
+            token=self.admin_token,
+            expected_status=200
+        )
+
+        if success and 'request_id' in response and 'request_number' in response:
+            payment_request_id = response['request_id']
+            payment_request_number = response['request_number']
+            self.log_test("Payment - Create Request", True)
+            
+            # Verify request number format (PAY-1404-X)
+            if response['request_number'].startswith('PAY-1404-'):
+                self.log_test("Payment - Request Number Format", True)
+            else:
+                self.log_test("Payment - Request Number Format", False, f"Invalid format: {response['request_number']}")
+        else:
+            self.log_test("Payment - Create Request", False, f"Response: {response}")
+            return False
+
+        # Step 2: Get Payment Request List
+        success, response = self.make_request(
+            'GET', 'payment-requests',
+            token=self.admin_token
+        )
+        
+        if success and isinstance(response, list):
+            # Find our created request
+            found_request = any(req.get('id') == payment_request_id for req in response)
+            if found_request:
+                self.log_test("Payment - Get Request List", True)
+            else:
+                self.log_test("Payment - Get Request List", False, "Created request not found in list")
+        else:
+            self.log_test("Payment - Get Request List", False, f"Response: {response}")
+
+        # Step 3: Get Payment Request Detail
+        success, response = self.make_request(
+            'GET', f'payment-requests/{payment_request_id}',
+            token=self.admin_token
+        )
+        
+        if success and response.get('id') == payment_request_id:
+            self.log_test("Payment - Get Request Detail", True)
+            
+            # Verify payment rows structure
+            payment_rows = response.get('payment_rows', [])
+            if len(payment_rows) == 2:
+                self.log_test("Payment - Payment Rows Structure", True)
+                
+                # Store row IDs for later use
+                row_id_1 = payment_rows[0]['id']
+                row_id_2 = payment_rows[1]['id']
+            else:
+                self.log_test("Payment - Payment Rows Structure", False, f"Expected 2 rows, got {len(payment_rows)}")
+                return False
+        else:
+            self.log_test("Payment - Get Request Detail", False, f"Response: {response}")
+            return False
+
+        # Step 4: Submit Payment Request (draft -> pending_financial)
+        success, response = self.make_request(
+            'POST', f'payment-requests/{payment_request_id}/submit',
+            token=self.admin_token
+        )
+        
+        if success:
+            self.log_test("Payment - Submit Request", True)
+        else:
+            self.log_test("Payment - Submit Request", False, f"Response: {response}")
+
+        # Verify status changed to pending_financial
+        success, response = self.make_request(
+            'GET', f'payment-requests/{payment_request_id}',
+            token=self.admin_token
+        )
+        
+        if success and response.get('status') == 'pending_financial':
+            self.log_test("Payment - Status After Submit", True)
+        else:
+            self.log_test("Payment - Status After Submit", False, f"Expected 'pending_financial', got: {response.get('status')}")
+
+        # Step 5: Set Payment Types (Financial Role)
+        payment_types_data = {
+            "payment_rows": [
+                {
+                    "id": row_id_1,
+                    "payment_type": "cash"
+                },
+                {
+                    "id": row_id_2,
+                    "payment_type": "check"
+                }
+            ]
+        }
+
+        success, response = self.make_request(
+            'POST', f'payment-requests/{payment_request_id}/set-payment-types',
+            data=payment_types_data,
+            token=self.admin_token
+        )
+        
+        if success:
+            self.log_test("Payment - Set Payment Types", True)
+        else:
+            self.log_test("Payment - Set Payment Types", False, f"Response: {response}")
+
+        # Verify status changed to pending_dev_manager
+        success, response = self.make_request(
+            'GET', f'payment-requests/{payment_request_id}',
+            token=self.admin_token
+        )
+        
+        if success and response.get('status') == 'pending_dev_manager':
+            self.log_test("Payment - Status After Payment Types", True)
+        else:
+            self.log_test("Payment - Status After Payment Types", False, f"Expected 'pending_dev_manager', got: {response.get('status')}")
+
+        # Step 6: Approve by Dev Manager
+        success, response = self.make_request(
+            'POST', f'payment-requests/{payment_request_id}/approve-dev-manager',
+            data={"notes": "تایید مدیر توسعه"},
+            token=self.admin_token
+        )
+        
+        if success:
+            self.log_test("Payment - Dev Manager Approval", True)
+        else:
+            self.log_test("Payment - Dev Manager Approval", False, f"Response: {response}")
+
+        # Verify status changed to pending_payment
+        success, response = self.make_request(
+            'GET', f'payment-requests/{payment_request_id}',
+            token=self.admin_token
+        )
+        
+        if success and response.get('status') == 'pending_payment':
+            self.log_test("Payment - Status After Dev Manager Approval", True)
+        else:
+            self.log_test("Payment - Status After Dev Manager Approval", False, f"Expected 'pending_payment', got: {response.get('status')}")
+
+        # Step 7: Process Final Payment
+        final_payment_data = {
+            "payment_date": "1404/09/27",
+            "notes": "پرداخت شد"
+        }
+
+        success, response = self.make_request(
+            'POST', f'payment-requests/{payment_request_id}/process-payment',
+            data=final_payment_data,
+            token=self.admin_token
+        )
+        
+        if success:
+            self.log_test("Payment - Process Final Payment", True)
+        else:
+            self.log_test("Payment - Process Final Payment", False, f"Response: {response}")
+
+        # Verify final status is completed
+        success, response = self.make_request(
+            'GET', f'payment-requests/{payment_request_id}',
+            token=self.admin_token
+        )
+        
+        if success and response.get('status') == 'completed':
+            self.log_test("Payment - Final Status Completed", True)
+        else:
+            self.log_test("Payment - Final Status Completed", False, f"Expected 'completed', got: {response.get('status')}")
+
+        # Test workflow history
+        if success and 'history' in response:
+            history = response['history']
+            expected_actions = ['created', 'submitted', 'payment_type_set', 'approved_dev_manager', 'completed']
+            actual_actions = [h.get('action') for h in history]
+            
+            if all(action in actual_actions for action in expected_actions):
+                self.log_test("Payment - Workflow History", True)
+            else:
+                self.log_test("Payment - Workflow History", False, f"Missing actions. Expected: {expected_actions}, Got: {actual_actions}")
+        else:
+            self.log_test("Payment - Workflow History", False, "No history found in response")
+
+        return True
+
     def test_role_based_access(self):
         """Test role-based access control"""
         print("\n🔒 Testing Role-Based Access Control...")

@@ -1611,8 +1611,8 @@ async def submit_payment_request(request_id: str, current_user: dict = Depends(g
     
     return {"message": "Payment request submitted"}
 
-@api_router.post("/payment-requests/{request_id}/set-payment-types")
-async def set_payment_types(request_id: str, data: PaymentRowUpdate, current_user: dict = Depends(get_current_user)):
+@api_router.post("/payment-requests/{request_id}/review-financial")
+async def review_financial(request_id: str, data: ActionRequest, current_user: dict = Depends(get_current_user)):
     if UserRole.FINANCIAL not in current_user.get('roles', []):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     
@@ -1623,26 +1623,18 @@ async def set_payment_types(request_id: str, data: PaymentRowUpdate, current_use
     if request['status'] != PaymentRequestStatus.PENDING_FINANCIAL:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status")
     
-    # Update payment types for each row
-    payment_rows = request.get('payment_rows', [])
-    for update_row in data.payment_rows:
-        for row in payment_rows:
-            if row['id'] == update_row.get('id'):
-                row['payment_type'] = update_row.get('payment_type')
-    
     history_entry = {
-        "action": "payment_type_set",
+        "action": "reviewed_by_financial",
         "actor_id": current_user['user_id'],
         "actor_name": current_user['full_name'],
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "notes": "نوع پرداخت تعیین شد"
+        "notes": data.notes or "بررسی شد توسط واحد مالی"
     }
     
     await db.payment_requests.update_one(
         {"id": request_id},
         {
             "$set": {
-                "payment_rows": payment_rows,
                 "status": PaymentRequestStatus.PENDING_DEV_MANAGER,
                 "updated_at": datetime.now(timezone.utc).isoformat()
             },
@@ -1660,7 +1652,7 @@ async def set_payment_types(request_id: str, data: PaymentRowUpdate, current_use
             f"درخواست پرداخت {request['request_number']} آماده تایید است"
         )
     
-    return {"message": "Payment types set"}
+    return {"message": "Payment reviewed by financial"}
 
 @api_router.post("/payment-requests/{request_id}/approve-dev-manager")
 async def approve_payment_dev_manager(request_id: str, action: ActionRequest, current_user: dict = Depends(get_current_user)):

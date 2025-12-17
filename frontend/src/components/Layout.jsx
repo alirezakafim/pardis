@@ -3,7 +3,7 @@ import { AuthContext, API } from '../App';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { Button } from './ui/button';
-import { Bell, LogOut, Home, Package, Users, TrendingUp, Menu, X, Lightbulb } from 'lucide-react';
+import { Bell, LogOut, Home, Package, Users, TrendingUp, Menu, X, Lightbulb, CreditCard } from 'lucide-react';
 import { Badge } from './ui/badge';
 
 const Layout = ({ children }) => {

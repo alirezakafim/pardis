@@ -11,6 +11,8 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import DatePicker from '@hassanmojab/react-modern-calendar-datepicker';
+import '@hassanmojab/react-modern-calendar-datepicker/lib/DatePicker.css';
 import { 
   Package, FileText, CheckCircle, XCircle, Upload, 
   Clock, User, Building, MessageSquare, Receipt, FileCheck 

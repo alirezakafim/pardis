@@ -15,6 +15,9 @@ import CostCentersManagement from './pages/CostCentersManagement';
 import ProjectProposalList from './pages/ProjectProposalList';
 import CreateProposal from './pages/CreateProposal';
 import ProposalDetail from './pages/ProposalDetail';
+import PaymentRequestList from './pages/PaymentRequestList';
+import CreatePaymentRequest from './pages/CreatePaymentRequest';
+import PaymentRequestDetail from './pages/PaymentRequestDetail';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;

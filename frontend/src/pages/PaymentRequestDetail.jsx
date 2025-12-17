@@ -436,14 +436,7 @@ const PaymentRequestDetail = () => {
                 />
               </div>
               <Button 
-                onClick={() => {
-                  if (!rejectFinancialNotes.trim()) {
-                    toast.error('دلیل رد اجباری است');
-                    return;
-                  }
-                  setRejectNotes(rejectFinancialNotes);
-                  handleRejectFinancial();
-                }} 
+                onClick={handleRejectFinancial} 
                 variant="destructive" 
                 className="w-full" 
                 data-testid="confirm-reject-financial-button"

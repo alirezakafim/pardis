@@ -143,7 +143,7 @@ const CreateRequest = () => {
                 <SelectTrigger className="bg-white border-gray-300" data-testid="cost-center-select">
                   <SelectValue placeholder="انتخاب مرکز هزینه" />
                 </SelectTrigger>
-                <SelectContent dir="rtl">
+                <SelectContent dir="rtl" className="z-[100]">
                   {costCenters.map(center => (
                     <SelectItem key={center.id} value={center.name}>
                       {center.name}

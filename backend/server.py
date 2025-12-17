@@ -28,7 +28,8 @@ from project_proposal import (
 )
 from payment_request import (
     PaymentRequest, PaymentRequestCreate, PaymentRowUpdate,
-    PaymentRequestStatus, PaymentReason, PaymentType, PaymentRow, PaymentRequestHistory
+    PaymentRequestStatus, PaymentReason, PaymentMethod, PaymentRow, PaymentRequestHistory,
+    RequestType
 )
 
 ROOT_DIR = Path(__file__).parent

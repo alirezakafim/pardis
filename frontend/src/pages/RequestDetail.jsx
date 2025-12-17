@@ -655,7 +655,7 @@ const RequestDetail = () => {
                 <Input
                   type="number"
                   value={receiptData.quantity}
-                  onChange={(e) => setReceiptData({ ...receiptData, quantity: e.target.value })}
+                  onChange={(e) => calculateReceiptTotal('quantity', e.target.value)}
                   data-testid="receipt-quantity-input"
                 />
               </div>
@@ -664,7 +664,7 @@ const RequestDetail = () => {
                 <Input
                   type="number"
                   value={receiptData.unit_price}
-                  onChange={(e) => setReceiptData({ ...receiptData, unit_price: e.target.value })}
+                  onChange={(e) => calculateReceiptTotal('unit_price', e.target.value)}
                   data-testid="receipt-unit-price-input"
                 />
               </div>
@@ -673,12 +673,51 @@ const RequestDetail = () => {
                 <Input
                   type="number"
                   value={receiptData.total_price}
-                  onChange={(e) => setReceiptData({ ...receiptData, total_price: e.target.value })}
+                  disabled
+                  className="bg-gray-100"
                   data-testid="receipt-total-price-input"
                 />
               </div>
               <Button onClick={handleAddReceipt} className="w-full bg-amber-600 hover:bg-amber-700" data-testid="save-receipt-button">
                 ثبت رسید
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showConfirmReceiptModal} onOpenChange={setShowConfirmReceiptModal}>
+          <DialogContent className="rtl" dir="rtl">
+            <DialogHeader>
+              <DialogTitle>تایید رسید</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>تاریخ رسید <span className="text-red-500">*</span></Label>
+                <DatePicker
+                  value={confirmReceiptData.receipt_date_obj}
+                  onChange={(date) => setConfirmReceiptData({...confirmReceiptData, receipt_date_obj: date})}
+                  locale="fa"
+                  inputPlaceholder="انتخاب تاریخ"
+                  inputClassName="w-full px-4 py-2 border border-gray-300 rounded-md focus:border-amber-500 bg-white"
+                  colorPrimary="#d97706"
+                  shouldHighlightWeekends
+                />
+              </div>
+              <div>
+                <Label>ساعت رسید <span className="text-red-500">*</span></Label>
+                <Input
+                  type="time"
+                  value={confirmReceiptData.receipt_time}
+                  onChange={(e) => setConfirmReceiptData({...confirmReceiptData, receipt_time: e.target.value})}
+                  className="w-full"
+                />
+              </div>
+              <Button 
+                onClick={() => handleConfirmReceipt(confirmType)} 
+                className="w-full bg-green-600 hover:bg-green-700"
+                data-testid="confirm-receipt-submit"
+              >
+                تایید رسید
               </Button>
             </div>
           </DialogContent>

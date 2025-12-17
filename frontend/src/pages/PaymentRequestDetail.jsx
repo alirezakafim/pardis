@@ -68,6 +68,24 @@ const PaymentRequestDetail = () => {
     }
   };
 
+  const handleRejectFinancial = async () => {
+    if (!rejectNotes.trim()) {
+      toast.error('دلیل رد اجباری است');
+      return;
+    }
+    try {
+      await axios.post(`${API}/payment-requests/${id}/reject-financial`, {
+        notes: rejectNotes
+      });
+      toast.success('درخواست رد و به متقاضی ارجاع شد');
+      setShowRejectModal(false);
+      setRejectNotes('');
+      fetchRequest();
+    } catch (error) {
+      toast.error('خطا در رد درخواست');
+    }
+  };
+
   const handleApproveDevManager = async () => {
     try {
       await axios.post(`${API}/payment-requests/${id}/approve-dev-manager`, {});

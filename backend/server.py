@@ -26,6 +26,10 @@ from project_proposal import (
     COOReview, AssignFeasibilityManager, RegisterProject,
     ProposalStatus, ProposalActionType, ProposalHistory, ProjectType
 )
+from payment_request import (
+    PaymentRequest, PaymentRequestCreate, PaymentRowUpdate,
+    PaymentRequestStatus, PaymentReason, PaymentType, PaymentRow, PaymentRequestHistory
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')

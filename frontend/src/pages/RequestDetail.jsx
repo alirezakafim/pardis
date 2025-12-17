@@ -502,10 +502,21 @@ const RequestDetail = () => {
                       </div>
                       <div className="space-y-2">
                         {receipt.confirmed_by_procurement ? (
-                          <Badge className="bg-green-600">✓ تایید واحد تامین</Badge>
+                          <div className="space-y-1">
+                            <Badge className="bg-green-600">✓ تایید واحد تامین</Badge>
+                            {receipt.procurement_receipt_date && (
+                              <p className="text-xs text-gray-600">
+                                {receipt.procurement_receipt_date} - {receipt.procurement_receipt_time}
+                              </p>
+                            )}
+                          </div>
                         ) : canConfirmReceiptProcurement && (
                           <Button 
-                            onClick={() => handleConfirmReceipt(receipt.id, 'procurement')} 
+                            onClick={() => {
+                              setConfirmReceiptData({receipt_id: receipt.id, receipt_date_obj: null, receipt_time: ''});
+                              setConfirmType('procurement');
+                              setShowConfirmReceiptModal(true);
+                            }} 
                             size="sm"
                             data-testid={`confirm-receipt-procurement-${receipt.id}`}
                           >
@@ -513,10 +524,21 @@ const RequestDetail = () => {
                           </Button>
                         )}
                         {receipt.confirmed_by_requester ? (
-                          <Badge className="bg-green-600">✓ تایید متقاضی</Badge>
+                          <div className="space-y-1">
+                            <Badge className="bg-green-600">✓ تایید متقاضی</Badge>
+                            {receipt.requester_receipt_date && (
+                              <p className="text-xs text-gray-600">
+                                {receipt.requester_receipt_date} - {receipt.requester_receipt_time}
+                              </p>
+                            )}
+                          </div>
                         ) : canConfirmReceiptRequester && (
                           <Button 
-                            onClick={() => handleConfirmReceipt(receipt.id, 'requester')} 
+                            onClick={() => {
+                              setConfirmReceiptData({receipt_id: receipt.id, receipt_date_obj: null, receipt_time: ''});
+                              setConfirmType('requester');
+                              setShowConfirmReceiptModal(true);
+                            }} 
                             size="sm"
                             data-testid={`confirm-receipt-requester-${receipt.id}`}
                           >

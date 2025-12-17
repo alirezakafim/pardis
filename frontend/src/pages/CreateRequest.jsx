@@ -131,7 +131,7 @@ const CreateRequest = () => {
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 relative z-30">
               <Label htmlFor="cost_center" className="text-gray-700 font-medium">
                 مرکز هزینه (واحد) <span className="text-red-500">*</span>
               </Label>
@@ -143,7 +143,7 @@ const CreateRequest = () => {
                 <SelectTrigger className="bg-white border-gray-300" data-testid="cost-center-select">
                   <SelectValue placeholder="انتخاب مرکز هزینه" />
                 </SelectTrigger>
-                <SelectContent dir="rtl" className="z-[100]">
+                <SelectContent dir="rtl" className="z-[100]" position="popper" sideOffset={5}>
                   {costCenters.map(center => (
                     <SelectItem key={center.id} value={center.name}>
                       {center.name}
@@ -153,11 +153,11 @@ const CreateRequest = () => {
               </Select>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 relative z-20">
               <Label htmlFor="need_date" className="text-gray-700 font-medium">
                 تاریخ ضرورت نیاز <span className="text-red-500">*</span>
               </Label>
-              <div className="relative z-10">
+              <div className="relative">
                 <DatePicker
                   value={selectedDay}
                   onChange={setSelectedDay}
@@ -172,7 +172,7 @@ const CreateRequest = () => {
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 relative z-10">
               <Label htmlFor="description" className="text-gray-700 font-medium">
                 توضیحات (اختیاری)
               </Label>

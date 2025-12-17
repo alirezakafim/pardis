@@ -393,6 +393,12 @@ const RequestDetail = () => {
               <p className="text-sm text-gray-600">متقاضی</p>
               <p className="text-lg font-medium text-gray-800">{request.requester_name}</p>
             </div>
+            {request.need_date && (
+              <div>
+                <p className="text-sm text-gray-600">تاریخ ضرورت نیاز</p>
+                <p className="text-lg font-medium text-gray-800">{request.need_date}</p>
+              </div>
+            )}
             {request.description && (
               <div className="col-span-2">
                 <p className="text-sm text-gray-600">توضیحات</p>
